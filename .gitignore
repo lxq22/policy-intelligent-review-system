@@ -1,0 +1,50 @@
+# macOS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node.js
+node_modules/
+dist/
+build/
+coverage/
+
+# Runtime files
+logs/
+tmp/
+temp/
+uploads/
+storage/
+
+# Sensitive or large project data
+data/raw/
+data/private/
+data/uploads/
+models/
+*.log
+
+# Office temporary files
+~$*.docx
+~$*.xlsx
+~$*.pptx
+
+# Private source reports kept locally
+/*.docx
