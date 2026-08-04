@@ -15,14 +15,21 @@ secrets/
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
 # Node.js
 node_modules/
+.pnpm-store/
 dist/
 build/
 coverage/
