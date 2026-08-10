@@ -89,7 +89,7 @@ git commit -m "test: add M4 policy document fixtures"
 - Produces: `ClauseSegmenter.segment(paragraphs: Sequence[ExtractedParagraph]) -> list[ParsedClause]`.
 - Raises: `UnsupportedDocumentError`, `ScannedPdfError`, or `DocumentParseError` with user-readable Chinese messages.
 
-- [ ] **Step 1: Write failing parser and segmentation tests**
+- [x] **Step 1: Write failing parser and segmentation tests**
 
 ```python
 @pytest.mark.parametrize("suffix", [".docx", ".pdf"])
@@ -102,23 +102,23 @@ def test_fixture_preserves_chapter_path_article_number_and_order(fixture_path_fo
 
 Also test table exclusion, multiline article merging, preamble handling, `.doc` rejection, corrupt DOCX/PDF, and a text-empty PDF raising `ScannedPdfError`.
 
-- [ ] **Step 2: Run parser tests and verify RED**
+- [x] **Step 2: Run parser tests and verify RED**
 
 Run: `cd event/backend && .venv/bin/pytest tests/test_document_parsers.py -q`
 
 Expected: FAIL because parser modules do not exist.
 
-- [ ] **Step 3: Implement minimal extractors and segmenter**
+- [x] **Step 3: Implement minimal extractors and segmenter**
 
 Use `python-docx` for paragraph-only DOCX extraction and PyMuPDF for text blocks ordered by document flow. Use compiled regular expressions for chapter, section, article, paragraph, and item markers. Do not infer a missing article number.
 
-- [ ] **Step 4: Run parser tests and verify GREEN**
+- [x] **Step 4: Run parser tests and verify GREEN**
 
 Run: `cd event/backend && .venv/bin/pytest tests/test_document_parsers.py -q`
 
 Expected: all format and segmentation tests PASS.
 
-- [ ] **Step 5: Commit parser behavior**
+- [x] **Step 5: Commit parser behavior**
 
 ```bash
 git add event/backend/app/parsers event/backend/tests/test_document_parsers.py event/backend/pyproject.toml
