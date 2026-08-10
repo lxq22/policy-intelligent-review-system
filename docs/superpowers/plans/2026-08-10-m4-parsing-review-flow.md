@@ -377,7 +377,7 @@ git commit -m "feat: save immutable M4 review inputs"
 - Produces: store actions `uploadRegulationVersion`, `uploadTemporaryFile`, `loadClauses`, `retryParse`, `loadCandidates`, `createReview`, and `loadReviewRecords`.
 - Consumes: the exact M4 REST interfaces from Tasks 4–6.
 
-- [ ] **Step 1: Add Vitest and write failing store tests**
+- [x] **Step 1: Add Vitest and write failing store tests**
 
 ```typescript
 it('sends only selected clauses, dimensions, and candidates', async () => {
@@ -398,21 +398,21 @@ it('sends only selected clauses, dimensions, and candidates', async () => {
 
 Add component tests for temporary upload, parse failure display, disabled navigation without clauses/dimensions/candidates, and the absence of task-status filters.
 
-- [ ] **Step 2: Run frontend tests and verify RED**
+- [x] **Step 2: Run frontend tests and verify RED**
 
 Run: `cd event/frontend && pnpm test --run`
 
 Expected: FAIL because M4 store actions and test setup do not exist.
 
-- [ ] **Step 3: Implement typed API and store mapping**
+- [x] **Step 3: Implement typed API and store mapping**
 
 Remove M4 use of `initialRegulations` clauses and `initialRecords`. Keep M5 mock issues isolated to existing demo reports only. Represent numeric backend clause IDs as numbers in new M4 interfaces.
 
-- [ ] **Step 4: Wire regulation detail and review wizard**
+- [x] **Step 4: Wire regulation detail and review wizard**
 
 Show real parse status, failure reason, clauses, and reparse. In the review wizard support both source types, explicit comparison-regulation selection for temporary conflict review, real candidate cards, and successful input-record creation without fake M5 completion.
 
-- [ ] **Step 5: Run frontend tests, typecheck, and build**
+- [x] **Step 5: Run frontend tests, typecheck, and build**
 
 Run: `cd event/frontend && pnpm test --run`
 
@@ -422,7 +422,7 @@ Run: `cd event/frontend && pnpm build`
 
 Expected: all tests PASS; typecheck and production build exit 0.
 
-- [ ] **Step 6: Commit frontend integration**
+- [x] **Step 6: Commit frontend integration**
 
 ```bash
 git add event/frontend

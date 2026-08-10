@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import type { UploadFile } from 'element-plus'
 import { Check, Document, UploadFilled } from '@element-plus/icons-vue'
 import PageHeader from '../../components/PageHeader.vue'
 import { useDataStore } from '../../stores/data'
-import type { DimensionKey } from '../../types'
+import type { DimensionKey, ReviewCreateInput, TemporaryReviewFile } from '../../types'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,27 +14,20 @@ const store = useDataStore()
 const step = ref(0)
 const sourceType = ref<'library' | 'temporary'>('library')
 const regulationId = ref<number>(Number(route.query.regulation) || store.activeRegulations.find((item) => item.parseStatus === '解析成功')?.id || 1)
-const selectedClauses = ref<string[]>([])
+const selectedClauses = ref<Array<number | string>>([])
 const selectedDimensions = ref<DimensionKey[]>(['semantic', 'rule', 'conflict', 'consistency'])
-const selectedCandidates = ref<string[]>([])
+const selectedCandidates = ref<number[]>([])
+const comparisonRegulationIds = ref<number[]>([])
+const selectedFile = ref<File>()
+const temporaryFile = ref<TemporaryReviewFile>()
 const runState = ref<'idle' | 'running' | 'success' | 'failed'>('idle')
 const resultId = ref('')
-let timer: number | undefined
+const busy = ref(false)
 
 const currentRegulation = computed(() => store.getRegulation(regulationId.value))
-const candidates = computed(() => {
-  const relations = currentRegulation.value?.relations || []
-  return relations.flatMap((relation) => {
-    const target = store.getRegulation(relation.targetId)
-    return (target?.clauses || []).map((clause) => ({
-      id: `${target?.id}-${clause.id}`,
-      regulationName: target?.name || relation.targetName,
-      relation: relation.type,
-      location: clause.location,
-      content: clause.content,
-    }))
-  })
-})
+const currentClauses = computed(() => sourceType.value === 'temporary' ? temporaryFile.value?.clauses || [] : currentRegulation.value?.clauses || [])
+const currentSourceName = computed(() => sourceType.value === 'temporary' ? temporaryFile.value?.originalName || selectedFile.value?.name : currentRegulation.value?.name)
+const candidates = computed(() => store.candidateClauses)
 const needCandidates = computed(() => selectedDimensions.value.includes('conflict'))
 const steps = computed(() => (needCandidates.value ? ['审查来源', '指定条款', '审查维度', '候选条款', '运行反馈'] : ['审查来源', '指定条款', '审查维度', '运行反馈']))
 const finalStep = computed(() => steps.value.length - 1)
@@ -50,21 +44,65 @@ function selectRegulation(id: number) {
   selectedCandidates.value = []
 }
 
+function selectUpload(upload: UploadFile) {
+  selectedFile.value = upload.raw
+  temporaryFile.value = undefined
+  selectedClauses.value = []
+  selectedCandidates.value = []
+}
+
 function toggleDimension(key: DimensionKey) {
   selectedDimensions.value = selectedDimensions.value.includes(key)
     ? selectedDimensions.value.filter((item) => item !== key)
     : [...selectedDimensions.value, key]
 }
 
-function next() {
-  if (step.value === 0 && sourceType.value === 'temporary') {
-    ElMessage.info('临时文件入口已展示；真实上传与解析将在 M4 接入，本次演示继续使用制度库示例')
-    sourceType.value = 'library'
+function reviewInput(): ReviewCreateInput {
+  return {
+    sourceType: sourceType.value === 'library' ? 'regulation' : 'temporary',
+    regulationId: sourceType.value === 'library' ? regulationId.value : undefined,
+    temporaryFileId: sourceType.value === 'temporary' ? temporaryFile.value?.id : undefined,
+    clauseIds: selectedClauses.value.filter((id): id is number => typeof id === 'number'),
+    dimensions: selectedDimensions.value,
+    candidateClauseIds: selectedCandidates.value,
+    comparisonRegulationIds: comparisonRegulationIds.value,
+  }
+}
+
+async function next() {
+  if (busy.value) return
+  if (step.value === 0) {
+    busy.value = true
+    try {
+      if (sourceType.value === 'library') {
+        if (!currentRegulation.value) return ElMessage.warning('请选择待审制度')
+        await store.loadClauses(regulationId.value)
+      } else {
+        if (!selectedFile.value) return ElMessage.warning('请选择待审文件')
+        temporaryFile.value = await store.uploadTemporaryFile(selectedFile.value)
+      }
+    } catch (error) {
+      ElMessage.error(error instanceof Error ? error.message : '文件解析失败')
+      return
+    } finally {
+      busy.value = false
+    }
   }
   if (step.value === 1 && !selectedClauses.value.length) return ElMessage.warning('请至少选择一个待审条款')
   if (step.value === 2 && !selectedDimensions.value.length) return ElMessage.warning('请至少选择一个审查维度')
   if (needCandidates.value && step.value === 3 && !selectedCandidates.value.length) return ElMessage.warning('制度冲突维度需要至少选择一个候选条款')
   if (step.value < finalStep.value) {
+    if (needCandidates.value && step.value === 2) {
+      busy.value = true
+      try {
+        await store.loadCandidates(reviewInput())
+      } catch (error) {
+        ElMessage.error(error instanceof Error ? error.message : '候选条款加载失败')
+        return
+      } finally {
+        busy.value = false
+      }
+    }
     step.value += 1
     if (step.value === finalStep.value) runReview()
   }
@@ -75,15 +113,23 @@ function previous() {
   step.value = Math.max(0, step.value - 1)
 }
 
-function runReview() {
+async function runReview() {
   runState.value = 'running'
-  timer = window.setTimeout(() => {
-    resultId.value = store.createReview(regulationId.value, selectedClauses.value.length, selectedDimensions.value)
+  try {
+    const record = await store.createReview(reviewInput())
+    resultId.value = record.id
     runState.value = 'success'
-  }, 1800)
+  } catch (error) {
+    runState.value = 'failed'
+    ElMessage.error(error instanceof Error ? error.message : '审查输入保存失败')
+  }
 }
 
-onBeforeUnmount(() => timer && window.clearTimeout(timer))
+onMounted(async () => {
+  if (currentRegulation.value?.parseStatus === '解析成功') {
+    await store.loadClauses(regulationId.value).catch(() => undefined)
+  }
+})
 </script>
 
 <template>
@@ -123,18 +169,23 @@ onBeforeUnmount(() => timer && window.clearTimeout(timer))
               </div>
             </div>
             <div v-else class="subsection">
-              <el-upload drag action="#" :auto-upload="false" accept=".docx,.pdf">
+              <el-upload drag action="#" :auto-upload="false" :limit="1" accept=".docx,.pdf" :on-change="selectUpload">
                 <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
                 <div class="el-upload__text">拖放文件到这里，或 <em>点击选择</em></div>
                 <template #tip><div class="el-upload__tip">不接受 .doc、扫描 PDF、图片或包含 OCR 需求的文件。</div></template>
               </el-upload>
+              <h3 class="section-title" style="margin-top:22px">选择对比制度</h3>
+              <p class="muted">仅在制度冲突维度中，从这里选定的制度内筛查候选条款。</p>
+              <el-select v-model="comparisonRegulationIds" multiple filterable placeholder="可选择一个或多个制度" style="width:100%; margin-top:10px">
+                <el-option v-for="item in store.activeRegulations.filter(i => i.parseStatus === '解析成功')" :key="item.id" :label="`${item.name} · ${item.version}`" :value="item.id" />
+              </el-select>
             </div>
           </template>
 
           <template v-else-if="step === 1">
             <div class="soft-note">可选择一个或多个条款，系统不会默认进行整份制度审查。</div>
             <el-checkbox-group v-model="selectedClauses" class="subsection">
-              <div v-for="clause in currentRegulation?.clauses" :key="clause.id" class="candidate-card" :class="{selected:selectedClauses.includes(clause.id)}">
+              <div v-for="clause in currentClauses" :key="clause.id" class="candidate-card" :class="{selected:selectedClauses.includes(clause.id)}">
                 <el-checkbox :value="clause.id"><strong>{{ clause.originalNo }} {{ clause.title }}</strong></el-checkbox>
                 <div class="table-sub">{{ clause.location }}</div>
                 <p>{{ clause.content }}</p>
@@ -154,7 +205,7 @@ onBeforeUnmount(() => timer && window.clearTimeout(timer))
             <div class="soft-note">候选条款由已建立关系的制度中筛出。只有你最终勾选的条款才会进入制度冲突审查。</div>
             <el-checkbox-group v-model="selectedCandidates" class="subsection">
               <div v-for="item in candidates" :key="item.id" class="candidate-card" :class="{selected:selectedCandidates.includes(item.id)}">
-                <div class="candidate-top"><el-checkbox :value="item.id"><strong>{{ item.regulationName }}</strong></el-checkbox><el-tag size="small" effect="plain">{{ item.relation }}</el-tag></div>
+                <div class="candidate-top"><el-checkbox :value="item.id"><strong>{{ item.regulationName }} {{ item.version }}</strong></el-checkbox><el-tag size="small" effect="plain">{{ item.evidence.join('＋') }}</el-tag></div>
                 <div class="table-sub">{{ item.location }}</div><p>{{ item.content }}</p>
               </div>
             </el-checkbox-group>
@@ -163,15 +214,15 @@ onBeforeUnmount(() => timer && window.clearTimeout(timer))
 
           <template v-else>
             <div class="running-wrap">
-              <template v-if="runState === 'running'"><div><div class="running-orbit"></div><h2>正在审查所选条款</h2><p class="muted">正在按所选维度组织证据与问题。本反馈仅存在于当前页面。</p></div></template>
-              <template v-else-if="runState === 'success'"><el-result icon="success" title="本次审查已完成" :sub-title="`已生成审查记录 ${resultId}`"><template #extra><el-button @click="router.push('/reviewer/records')">返回记录</el-button><el-button type="primary" @click="router.push(`/reviewer/reports/${resultId}`)">查看四维报告</el-button></template></el-result></template>
-              <template v-else-if="runState === 'failed'"><el-result icon="error" title="本次审查失败" sub-title="外部服务未返回可用结果，请重新发起。"><template #extra><el-button type="primary" @click="runReview">重新执行</el-button></template></el-result></template>
+              <template v-if="runState === 'running'"><div><div class="running-orbit"></div><h2>正在保存审查输入</h2><p class="muted">正在固定所选条款、维度和候选条款快照。</p></div></template>
+              <template v-else-if="runState === 'success'"><el-result icon="success" title="审查输入已保存" :sub-title="`已生成审查记录 ${resultId}`"><template #extra><el-button type="primary" @click="router.push('/reviewer/records')">查看审查记录</el-button></template></el-result></template>
+              <template v-else-if="runState === 'failed'"><el-result icon="error" title="保存失败" sub-title="未能保存本次审查输入，请重新提交。"><template #extra><el-button type="primary" @click="runReview">重新提交</el-button></template></el-result></template>
             </div>
           </template>
 
           <div v-if="step < finalStep" class="wizard-footer">
             <el-button :disabled="step===0" @click="previous">上一步</el-button>
-            <el-button type="primary" @click="next">{{ step === finalStep - 1 ? '开始审查' : '下一步' }}</el-button>
+            <el-button type="primary" :loading="busy" @click="next">{{ step === finalStep - 1 ? '保存审查输入' : '下一步' }}</el-button>
           </div>
         </div>
       </div>
@@ -179,7 +230,7 @@ onBeforeUnmount(() => timer && window.clearTimeout(timer))
       <aside class="panel wizard-side">
         <div class="panel-head"><h2>本次选择</h2></div>
         <div class="panel-body summary-list">
-          <div><label>待审制度</label><div>{{ currentRegulation?.name || '未选择' }}</div></div>
+          <div><label>待审制度</label><div>{{ currentSourceName || '未选择' }}</div></div>
           <div><label>待审条款</label><div>{{ selectedClauses.length ? `${selectedClauses.length} 个条款` : '尚未选择' }}</div></div>
           <div><label>审查维度</label><div class="tag-row"><el-tag v-for="key in selectedDimensions" :key="key" size="small" effect="plain">{{ dimensionMeta.find(i=>i.key===key)?.title }}</el-tag></div></div>
           <div v-if="needCandidates"><label>冲突候选</label><div>{{ selectedCandidates.length ? `${selectedCandidates.length} 个条款` : '尚未选择' }}</div></div>

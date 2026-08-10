@@ -1,8 +1,11 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiRequest, jsonBody } from '../api/client'
-import { initialIssues, initialRecords, initialRegulations } from '../data/mock'
+import { multipartBody } from '../api/multipart'
+import { initialIssues } from '../data/mock'
 import type {
+  CandidateClause,
+  Clause,
   DimensionKey,
   MasterDataItem,
   OperationLog,
@@ -10,10 +13,12 @@ import type {
   Regulation,
   RelationSuggestion,
   ReviewIssue,
+  ReviewCreateInput,
   ReviewRecord,
   Role,
   UnitItem,
   User,
+  TemporaryReviewFile,
 } from '../types'
 
 interface ApiVersion {
@@ -22,6 +27,52 @@ interface ApiVersion {
   effective_date?: string
   file_name?: string
   note?: string
+  parse_status?: Regulation['parseStatus']
+}
+
+interface ApiClause {
+  id: number
+  sequence: number
+  original_no: string
+  title: string
+  content: string
+  level: string
+  heading_path: string[]
+  paragraph_start: number
+  paragraph_end: number
+}
+
+interface ApiTemporaryFile {
+  id: number
+  original_name: string
+  parse_status: Regulation['parseStatus']
+  parse_error?: string
+}
+
+interface ApiCandidate {
+  clause_id: number
+  regulation_id: number
+  regulation_name: string
+  version?: string
+  original_no: string
+  content: string
+  heading_path: string[]
+  score: number
+  evidence: string[]
+}
+
+interface ApiReviewRecord {
+  id: number
+  record_code: string
+  source_type: 'regulation' | 'temporary'
+  regulation_id?: number
+  temporary_file_id?: number
+  regulation_name?: string
+  dimensions: DimensionKey[]
+  source_snapshot: Array<{ clause_id: number }>
+  candidate_snapshot: Array<{ clause_id: number }>
+  created_at: string
+  completed_at?: string
 }
 
 interface ApiRelation {
@@ -90,7 +141,6 @@ function formatDateTime(value: string) {
 }
 
 function mapRegulation(item: ApiRegulation): Regulation {
-  const prototype = initialRegulations.find((candidate) => candidate.id === item.id)
   return {
     id: item.id,
     name: item.name || '未命名制度',
@@ -110,12 +160,14 @@ function mapRegulation(item: ApiRegulation): Regulation {
     scope: item.scope || '',
     fileName: item.file_name || '',
     parseStatus: item.parse_status,
-    clauses: structuredClone(prototype?.clauses || []),
+    clauses: [],
     versions: (item.versions || []).map((version) => ({
+      id: version.id,
       version: version.version || '',
       effectiveDate: version.effective_date || '',
       fileName: version.file_name || '',
       note: version.note || '',
+      parseStatus: version.parse_status,
     })),
     relations: (item.relations || []).map((relation) => ({
       id: relation.id,
@@ -127,6 +179,46 @@ function mapRegulation(item: ApiRegulation): Regulation {
     })),
     deleted: item.deleted,
     updatedAt: formatDateTime(item.updated_at),
+  }
+}
+
+function mapClause(item: ApiClause): Clause {
+  return {
+    id: item.id,
+    originalNo: item.original_no,
+    title: item.title,
+    content: item.content,
+    level: item.level,
+    location: [...item.heading_path, item.original_no].join(' > '),
+  }
+}
+
+function mapCandidate(item: ApiCandidate): CandidateClause {
+  return {
+    id: item.clause_id,
+    regulationId: item.regulation_id,
+    regulationName: item.regulation_name,
+    version: item.version || '',
+    originalNo: item.original_no,
+    content: item.content,
+    location: [...item.heading_path, item.original_no].join(' > '),
+    score: item.score,
+    evidence: item.evidence,
+  }
+}
+
+function mapReviewRecord(item: ApiReviewRecord): ReviewRecord {
+  return {
+    id: item.record_code,
+    internalId: item.id,
+    regulationId: item.regulation_id || 0,
+    regulationName: item.regulation_name || '临时待审文件',
+    clauseCount: item.source_snapshot.length,
+    dimensions: item.dimensions,
+    createdBy: '审查人员',
+    createdAt: formatDateTime(item.created_at),
+    completedAt: formatDateTime(item.completed_at || item.created_at),
+    problemCount: 0,
   }
 }
 
@@ -145,7 +237,8 @@ function mapLog(item: ApiLog): OperationLog {
 export const useDataStore = defineStore('data', () => {
   const regulations = ref<Regulation[]>([])
   const users = ref<User[]>([])
-  const records = ref<ReviewRecord[]>(structuredClone(initialRecords))
+  const records = ref<ReviewRecord[]>([])
+  const candidateClauses = ref<CandidateClause[]>([])
   const issues = ref<ReviewIssue[]>(structuredClone(initialIssues))
   const logs = ref<OperationLog[]>([])
   const relationSuggestions = ref<Record<number, RelationSuggestion[]>>({})
@@ -175,6 +268,7 @@ export const useDataStore = defineStore('data', () => {
         departmentItems.value = departmentData.map((item) => ({ id: item.id, name: item.name || '' }))
         categoryItems.value = categoryData.map((item) => ({ id: item.id, name: item.name || '' }))
         units.value = unitData.map((item) => ({ id: item.id, name: item.name || '', level: item.level, parentId: item.parent_id, parentName: item.parent_name }))
+        await loadReviewRecords()
       } else if (role === 'admin') {
         const [userData, deletedData, logData] = await Promise.all([
           apiRequest<User[]>('/admin/users'),
@@ -198,7 +292,15 @@ export const useDataStore = defineStore('data', () => {
     const index = regulations.value.findIndex((candidate) => candidate.id === id)
     if (index >= 0) regulations.value[index] = item
     else regulations.value.push(item)
+    if (item.parseStatus === '解析成功') await loadClauses(id)
     return item
+  }
+
+  async function loadClauses(regulationId: number) {
+    const clauses = (await apiRequest<ApiClause[]>(`/regulations/${regulationId}/clauses`)).map(mapClause)
+    const regulation = getRegulation(regulationId)
+    if (regulation) regulation.clauses = clauses
+    return clauses
   }
 
   function getRegulation(id: number) {
@@ -278,10 +380,10 @@ export const useDataStore = defineStore('data', () => {
     await Promise.all([loadRegulation(regulationId), loadRelationSuggestions(regulationId)])
   }
 
-  async function addVersion(regulationId: number, input: { version: string; effectiveDate: string; fileName: string }) {
-    await apiRequest<ApiVersion>(`/regulations/${regulationId}/versions`, {
+  async function uploadRegulationVersion(regulationId: number, input: { version: string; effectiveDate: string; note?: string; file: File }) {
+    await apiRequest<ApiVersion>(`/regulations/${regulationId}/versions/upload`, {
       method: 'POST',
-      ...jsonBody({ version: input.version || null, effective_date: input.effectiveDate || null, file_name: input.fileName || null }),
+      ...multipartBody({ file: input.file, version: input.version, effective_date: input.effectiveDate, note: input.note }),
     })
     return loadRegulation(regulationId)
   }
@@ -296,25 +398,64 @@ export const useDataStore = defineStore('data', () => {
     }
   }
 
-  function retryParse(id: number) {
+  async function retryParse(id: number) {
     const target = getRegulation(id)
-    if (!target) return
+    const versionId = target?.versions[0]?.id
+    if (!target || !versionId) throw new Error('未找到可重新解析的制度版本')
     target.parseStatus = '解析中'
-    window.setTimeout(() => {
-      target.parseStatus = '解析成功'
-      if (!target.clauses.length) target.clauses = structuredClone(initialRegulations[0].clauses.slice(0, 2))
-    }, 1200)
+    await apiRequest<ApiVersion>(`/regulation-versions/${versionId}/reparse`, { method: 'POST' })
+    return loadRegulation(id)
   }
 
-  function createReview(regulationId: number, clauseCount: number, dimensions: DimensionKey[]) {
-    const regulation = getRegulation(regulationId)!
-    const date = new Date()
-    const ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`
-    const sequence = String(records.value.filter((item) => item.id.startsWith(`${regulation.name}-${ymd}`)).length + 1).padStart(2, '0')
-    const id = `${regulation.name}-${ymd}-${sequence}`
-    const formatted = date.toLocaleString('zh-CN', { hour12: false })
-    records.value.unshift({ id, regulationId, regulationName: regulation.name, clauseCount, dimensions, createdBy: '李明', createdAt: formatted, completedAt: formatted, problemCount: dimensions.length })
-    return id
+  async function uploadTemporaryFile(file: File): Promise<TemporaryReviewFile> {
+    const item = await apiRequest<ApiTemporaryFile>('/temporary-files', {
+      method: 'POST',
+      ...multipartBody({ file }),
+    })
+    const clauses = (await apiRequest<ApiClause[]>(`/temporary-files/${item.id}/clauses`)).map(mapClause)
+    return {
+      id: item.id,
+      originalName: item.original_name,
+      parseStatus: item.parse_status,
+      parseError: item.parse_error,
+      clauses,
+    }
+  }
+
+  async function loadCandidates(input: ReviewCreateInput) {
+    candidateClauses.value = (await apiRequest<ApiCandidate[]>('/reviews/candidates', {
+      method: 'POST',
+      ...jsonBody({
+        source_type: input.sourceType,
+        regulation_id: input.regulationId || null,
+        temporary_file_id: input.temporaryFileId || null,
+        clause_ids: input.clauseIds,
+        comparison_regulation_ids: input.comparisonRegulationIds,
+      }),
+    })).map(mapCandidate)
+    return candidateClauses.value
+  }
+
+  async function createReview(input: ReviewCreateInput) {
+    const record = mapReviewRecord(await apiRequest<ApiReviewRecord>('/reviews', {
+      method: 'POST',
+      ...jsonBody({
+        source_type: input.sourceType,
+        regulation_id: input.regulationId || null,
+        temporary_file_id: input.temporaryFileId || null,
+        clause_ids: input.clauseIds,
+        dimensions: input.dimensions,
+        candidate_clause_ids: input.candidateClauseIds,
+        comparison_regulation_ids: input.comparisonRegulationIds,
+      }),
+    }))
+    records.value.unshift(record)
+    return record
+  }
+
+  async function loadReviewRecords() {
+    records.value = (await apiRequest<ApiReviewRecord[]>('/reviews')).map(mapReviewRecord)
+    return records.value
   }
 
   function processIssue(id: string, action: '采纳修改建议' | '忽略', opinion: string, actor: string) {
@@ -435,6 +576,7 @@ export const useDataStore = defineStore('data', () => {
     regulations,
     users,
     records,
+    candidateClauses,
     issues,
     logs,
     relationSuggestions,
@@ -449,6 +591,7 @@ export const useDataStore = defineStore('data', () => {
     deletedRegulations,
     loadForRole,
     loadRegulation,
+    loadClauses,
     getRegulation,
     saveRegulation,
     deleteRegulation,
@@ -457,9 +600,12 @@ export const useDataStore = defineStore('data', () => {
     deleteRelation,
     loadRelationSuggestions,
     confirmRelationSuggestion,
-    addVersion,
+    uploadRegulationVersion,
+    uploadTemporaryFile,
     retryParse,
+    loadCandidates,
     createReview,
+    loadReviewRecords,
     processIssue,
     addOpinion,
     updateUserPermissions,

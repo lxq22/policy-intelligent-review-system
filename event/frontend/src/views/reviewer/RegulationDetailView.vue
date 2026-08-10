@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadFile } from 'element-plus'
 import { ArrowLeft, Check, Connection, Delete, DocumentChecked, Plus, Refresh, Upload } from '@element-plus/icons-vue'
 import PageHeader from '../../components/PageHeader.vue'
 import PermissionButton from '../../components/PermissionButton.vue'
@@ -15,7 +16,7 @@ const activeTab = ref('overview')
 const relationDialog = ref(false)
 const versionDialog = ref(false)
 const relationForm = reactive<{ targetId?: number; type: Regulation['relations'][number]['type'] }>({ type: '关联' })
-const versionForm = reactive({ version: '', effectiveDate: '', fileName: '' })
+const versionForm = reactive<{ version: string; effectiveDate: string; note: string; file?: File }>({ version: '', effectiveDate: '', note: '' })
 const regulation = computed(() => store.getRegulation(Number(route.params.id)))
 const relatedRecords = computed(() => store.records.filter((item) => item.regulationId === regulation.value?.id))
 const suggestions = computed(() => store.relationSuggestions[Number(route.params.id)] || [])
@@ -35,12 +36,12 @@ async function addRelation() {
 }
 
 async function addVersion() {
-  if (!regulation.value || !versionForm.version) {
-    ElMessage.warning('请填写版本号')
+  if (!regulation.value || !versionForm.version || !versionForm.file) {
+    ElMessage.warning('请填写版本号并选择制度文件')
     return
   }
   try {
-    await store.addVersion(regulation.value.id, versionForm)
+    await store.uploadRegulationVersion(regulation.value.id, { ...versionForm, file: versionForm.file })
     versionDialog.value = false
     ElMessage.success('新版本已保存，旧版本继续保留')
   } catch (error) {
@@ -74,10 +75,18 @@ async function confirmSuggestion(suggestionId: number) {
   }
 }
 
-function retry() {
+function selectVersionFile(upload: UploadFile) {
+  versionForm.file = upload.raw
+}
+
+async function retry() {
   if (!regulation.value) return
-  store.retryParse(regulation.value.id)
-  ElMessage.info('已重新开始解析，请稍候')
+  try {
+    await store.retryParse(regulation.value.id)
+    ElMessage.success('重新解析完成')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '重新解析失败')
+  }
 }
 
 onMounted(async () => {
@@ -213,11 +222,16 @@ onMounted(async () => {
     </el-dialog>
 
     <el-dialog v-model="versionDialog" title="上传新版本" width="560px">
-      <div class="soft-note">原型保留旧版本及替代说明；实际文件上传与解析将在后续里程碑接入。</div>
+      <div class="soft-note">上传后会立即保存原始文件并解析条款；旧版本及其历史记录继续保留。</div>
       <el-form label-position="top" class="subsection">
         <el-form-item label="版本号"><el-input v-model="versionForm.version" /></el-form-item>
         <el-form-item label="生效日期"><el-date-picker v-model="versionForm.effectiveDate" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
-        <el-form-item label="文件名"><el-input v-model="versionForm.fileName" placeholder=".docx 或普通文字 PDF" /></el-form-item>
+        <el-form-item label="制度文件">
+          <el-upload action="#" :auto-upload="false" :limit="1" accept=".docx,.pdf" :on-change="selectVersionFile">
+            <el-button :icon="Upload">选择 .docx 或文字 PDF</el-button>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="版本说明"><el-input v-model="versionForm.note" type="textarea" :rows="3" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="versionDialog=false">取消</el-button><el-button type="primary" @click="addVersion">保存版本</el-button></template>
     </el-dialog>

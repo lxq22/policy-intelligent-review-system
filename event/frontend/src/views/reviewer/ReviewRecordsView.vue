@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Search, View } from '@element-plus/icons-vue'
 import PageHeader from '../../components/PageHeader.vue'
@@ -10,6 +10,8 @@ const store = useDataStore()
 const keyword = ref('')
 const filtered = computed(() => store.records.filter((item) => !keyword.value || item.regulationName.includes(keyword.value) || item.id.includes(keyword.value)))
 const labels = { semantic: '语义分歧', rule: '规则匹配', conflict: '制度冲突', consistency: '一致性' }
+
+onMounted(() => store.loadReviewRecords())
 </script>
 
 <template>
@@ -33,10 +35,10 @@ const labels = { semantic: '语义分歧', rule: '规则匹配', conflict: '制�
             <div class="tag-row" style="margin-top:6px"><el-tag v-for="key in row.dimensions" :key="key" size="small" effect="plain">{{ labels[key as keyof typeof labels] }}</el-tag></div>
           </template>
         </el-table-column>
-        <el-table-column label="问题数" width="90"><template #default="{row}"><strong>{{ row.problemCount }}</strong></template></el-table-column>
+        <el-table-column label="结果" width="100"><template #default><el-tag type="info" effect="plain">待智能审查</el-tag></template></el-table-column>
         <el-table-column prop="createdBy" label="发起人" width="100" />
         <el-table-column prop="createdAt" label="创建时间" width="160" />
-        <el-table-column label="操作" width="105" fixed="right"><template #default="{row}"><el-button link type="primary" :icon="View" @click="router.push(`/reviewer/reports/${row.id}`)">查看报告</el-button></template></el-table-column>
+        <el-table-column label="操作" width="120" fixed="right"><template #default><span class="muted"><el-icon><View /></el-icon> 输入已留存</span></template></el-table-column>
       </el-table>
       <el-empty v-if="!filtered.length" description="没有匹配的审查记录" />
     </div>

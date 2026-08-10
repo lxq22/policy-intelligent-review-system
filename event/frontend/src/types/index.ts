@@ -21,7 +21,7 @@ export interface User {
 }
 
 export interface Clause {
-  id: string
+  id: number | string
   originalNo: string
   title: string
   content: string
@@ -30,10 +30,12 @@ export interface Clause {
 }
 
 export interface RegulationVersion {
+  id?: number
   version: string
   effectiveDate: string
   fileName: string
   note: string
+  parseStatus?: ParseStatus
 }
 
 export interface Relation {
@@ -82,6 +84,7 @@ export interface Regulation {
 
 export interface ReviewRecord {
   id: string
+  internalId?: number
   regulationId: number
   regulationName: string
   clauseCount: number
@@ -90,6 +93,36 @@ export interface ReviewRecord {
   createdAt: string
   completedAt: string
   problemCount: number
+}
+
+export interface TemporaryReviewFile {
+  id: number
+  originalName: string
+  parseStatus: ParseStatus
+  parseError?: string
+  clauses: Clause[]
+}
+
+export interface CandidateClause {
+  id: number
+  regulationId: number
+  regulationName: string
+  version: string
+  originalNo: string
+  content: string
+  location: string
+  score: number
+  evidence: string[]
+}
+
+export interface ReviewCreateInput {
+  sourceType: 'regulation' | 'temporary'
+  regulationId?: number
+  temporaryFileId?: number
+  clauseIds: number[]
+  dimensions: DimensionKey[]
+  candidateClauseIds: number[]
+  comparisonRegulationIds: number[]
 }
 
 export interface BaseIssue {
