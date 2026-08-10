@@ -1,6 +1,7 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -8,6 +9,7 @@ from ..auth import require_reviewer, reviewer_permission
 from ..database import get_db
 from ..models import (
     ManualRelation,
+    Clause,
     OperationLog,
     Regulation,
     RegulationVersion,
@@ -16,6 +18,7 @@ from ..models import (
 )
 from ..schemas import (
     RegulationIn,
+    ClauseOut,
     RegulationOut,
     RelationCreate,
     RelationOut,
@@ -23,10 +26,15 @@ from ..schemas import (
     VersionIn,
     VersionOut,
 )
+from ..config import get_settings
+from ..parsers import DocumentParseError, UnsupportedDocumentError, parser_for
 from ..serializers import regulation_out
 from ..services.relations import collect_relations
+from ..services.file_storage import FileStorage
+from ..services.parsing import ParseService
 
 router = APIRouter(prefix="/regulations", tags=["制度"])
+settings = get_settings()
 
 
 def get_active_regulation(db: Session, regulation_id: int) -> Regulation:
@@ -136,6 +144,77 @@ def add_version(
     db.commit()
     db.refresh(version)
     return version
+
+
+@router.post("/{regulation_id}/versions/upload", response_model=VersionOut, status_code=201)
+def upload_version(
+    regulation_id: int,
+    file: UploadFile = File(...),
+    version: str | None = Form(default=None),
+    effective_date: date | None = Form(default=None),
+    note: str | None = Form(default=None),
+    _: User = Depends(reviewer_permission("upload")),
+    db: Session = Depends(get_db),
+):
+    item = get_active_regulation(db, regulation_id)
+    try:
+        parser_for(Path(file.filename or ""))
+    except UnsupportedDocumentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    stored = FileStorage(settings.storage_root).save(file, f"regulations/{item.id}/versions")
+    record = RegulationVersion(
+        regulation_id=item.id,
+        version=version,
+        effective_date=effective_date,
+        file_name=stored.original_name,
+        stored_path=stored.relative_path,
+        mime_type=stored.mime_type,
+        file_size=stored.size,
+        sha256=stored.sha256,
+        parse_status="待解析",
+        note=note,
+    )
+    item.current_version = version
+    item.effective_date = effective_date or item.effective_date
+    item.file_name = stored.original_name
+    item.parse_status = "待解析"
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    try:
+        ParseService(settings.storage_root).parse_version(db, record.id)
+    except (DocumentParseError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    db.refresh(record)
+    return record
+
+
+@router.get("/{regulation_id}/clauses", response_model=list[ClauseOut])
+def list_regulation_clauses(
+    regulation_id: int,
+    _: User = Depends(require_reviewer),
+    db: Session = Depends(get_db),
+):
+    get_active_regulation(db, regulation_id)
+    version_id = db.scalar(
+        select(RegulationVersion.id)
+        .where(
+            RegulationVersion.regulation_id == regulation_id,
+            RegulationVersion.parse_status == "解析成功",
+        )
+        .order_by(RegulationVersion.id.desc())
+        .limit(1)
+    )
+    if version_id is None:
+        return []
+    return list(
+        db.scalars(
+            select(Clause)
+            .where(Clause.regulation_version_id == version_id)
+            .order_by(Clause.sequence)
+        )
+    )
 
 
 @router.get("/{regulation_id}/relations", response_model=list[RelationOut])

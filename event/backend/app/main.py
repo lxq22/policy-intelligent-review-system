@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api import admin_routes, auth_routes, master_data_routes, regulation_routes
+from .api import admin_routes, auth_routes, master_data_routes, parsing_routes, regulation_routes
 from .config import get_settings
 from .database import SessionLocal
 from .seed import seed_demo_data
@@ -46,4 +46,5 @@ def health():
 app.include_router(auth_routes.router, prefix=settings.api_prefix)
 app.include_router(master_data_routes.router, prefix=settings.api_prefix)
 app.include_router(regulation_routes.router, prefix=settings.api_prefix)
+app.include_router(parsing_routes.router, prefix=settings.api_prefix)
 app.include_router(admin_routes.router, prefix=settings.api_prefix)

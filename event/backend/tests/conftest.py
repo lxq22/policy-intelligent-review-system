@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -6,9 +7,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import event
 
 TEST_DB = Path(__file__).parent / "m3-test.db"
+TEST_STORAGE = Path(__file__).parent / "test-storage"
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
 os.environ["BOOTSTRAP_DEMO_DATA"] = "true"
 os.environ["COOKIE_SECURE"] = "false"
+os.environ["STORAGE_ROOT"] = str(TEST_STORAGE)
 
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
@@ -23,11 +26,13 @@ def enable_sqlite_foreign_keys(dbapi_connection, _):
 
 @pytest.fixture()
 def client():
+    shutil.rmtree(TEST_STORAGE, ignore_errors=True)
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     with TestClient(app) as test_client:
         yield test_client
     Base.metadata.drop_all(bind=engine)
+    shutil.rmtree(TEST_STORAGE, ignore_errors=True)
 
 
 @pytest.fixture()

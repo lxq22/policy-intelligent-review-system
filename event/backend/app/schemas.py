@@ -75,6 +75,12 @@ class VersionIn(BaseModel):
 
 class VersionOut(VersionIn):
     id: int
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
+    sha256: Optional[str] = None
+    parse_status: str = "待解析"
+    parse_error: Optional[str] = None
+    parsed_at: Optional[datetime] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -90,6 +96,20 @@ class ClauseOut(BaseModel):
     heading_path: list[str]
     paragraph_start: int
     paragraph_end: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TemporaryFileOut(BaseModel):
+    id: int
+    original_name: str
+    mime_type: Optional[str] = None
+    file_size: int
+    sha256: str
+    parse_status: str
+    parse_error: Optional[str] = None
+    parsed_at: Optional[datetime] = None
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

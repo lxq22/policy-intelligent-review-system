@@ -204,7 +204,7 @@ git commit -m "feat: persist M4 files and parsed clauses"
 - Produces: `GET /api/v1/temporary-files/{id}` and `/clauses`.
 - Produces: `POST /api/v1/temporary-files/{id}/reparse`.
 
-- [ ] **Step 1: Write failing API tests**
+- [x] **Step 1: Write failing API tests**
 
 ```python
 def test_temporary_upload_parses_but_never_appears_in_regulation_list(reviewer_client, docx_fixture):
@@ -221,23 +221,23 @@ def test_temporary_upload_parses_but_never_appears_in_regulation_list(reviewer_c
 
 Also test `PERM-001` on formal upload, reviewer access to temporary upload, unsupported extension, scanned PDF error, and reparse endpoints.
 
-- [ ] **Step 2: Run API tests and verify RED**
+- [x] **Step 2: Run API tests and verify RED**
 
 Run: `cd event/backend && .venv/bin/pytest tests/test_parsing_api.py -q`
 
 Expected: 404 for missing M4 routes.
 
-- [ ] **Step 3: Implement routes and response schemas**
+- [x] **Step 3: Implement routes and response schemas**
 
 Keep parse responses synchronous for the M4 prototype while persisting every defined state transition. Return the common JSON error envelope through existing FastAPI exception handling.
 
-- [ ] **Step 4: Run API tests and verify GREEN**
+- [x] **Step 4: Run API tests and verify GREEN**
 
 Run: `cd event/backend && .venv/bin/pytest tests/test_parsing_api.py -q`
 
 Expected: all upload, parse, isolation, permission, and reparse tests PASS.
 
-- [ ] **Step 5: Commit parsing API**
+- [x] **Step 5: Commit parsing API**
 
 ```bash
 git add event/backend/app/api event/backend/app/main.py event/backend/app/schemas.py event/backend/tests/test_parsing_api.py
