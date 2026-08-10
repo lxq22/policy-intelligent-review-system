@@ -80,6 +80,20 @@ class VersionOut(VersionIn):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ClauseOut(BaseModel):
+    id: int
+    sequence: int
+    original_no: str
+    title: str
+    content: str
+    level: str
+    heading_path: list[str]
+    paragraph_start: int
+    paragraph_end: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class RelationOut(BaseModel):
     id: str
     type: str

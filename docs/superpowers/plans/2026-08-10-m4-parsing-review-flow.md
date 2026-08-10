@@ -144,7 +144,7 @@ git commit -m "feat: parse DOCX and text PDF into clauses"
 - Produces: `ParseService.parse_temporary_file(db: Session, temporary_file_id: int) -> list[Clause]`.
 - Persists: `TemporaryReviewFile`, `Clause`, enriched `RegulationVersion`, and a 256-dimension `Clause.embedding` with SQLite JSON variant and PostgreSQL `Vector(256)`.
 
-- [ ] **Step 1: Write failing persistence tests**
+- [x] **Step 1: Write failing persistence tests**
 
 ```python
 def test_successful_reparse_atomically_replaces_clauses(db, parsed_version):
@@ -158,21 +158,21 @@ def test_successful_reparse_atomically_replaces_clauses(db, parsed_version):
 
 Also test SHA-256 metadata, safe relative paths, failed reparse preserving the previous successful clauses, all four parse states, and temporary-file isolation.
 
-- [ ] **Step 2: Run persistence tests and verify RED**
+- [x] **Step 2: Run persistence tests and verify RED**
 
 Run: `cd event/backend && .venv/bin/pytest tests/test_parsing_service.py -q`
 
 Expected: FAIL because M4 models and services are absent.
 
-- [ ] **Step 3: Add models and explicit Alembic migration**
+- [x] **Step 3: Add models and explicit Alembic migration**
 
 Add file metadata and parse fields to `regulation_versions`; add `temporary_review_files` and `clauses`; expand `review_records` only in Task 6. Use database check constraints only for the confirmed parse states and source ownership invariant.
 
-- [ ] **Step 4: Implement safe storage and transactional parsing**
+- [x] **Step 4: Implement safe storage and transactional parsing**
 
 Write uploads to a temporary sibling path, fsync, then atomically rename. During reparse, extract before deleting existing clauses; replace rows and update status in one transaction. On failure, roll back replacement and persist only `解析失败` plus the readable reason when no prior successful result exists.
 
-- [ ] **Step 5: Run migration and persistence tests**
+- [x] **Step 5: Run migration and persistence tests**
 
 Run: `cd event/backend && .venv/bin/alembic upgrade head`
 
@@ -180,7 +180,7 @@ Run: `cd event/backend && .venv/bin/pytest tests/test_parsing_service.py -q`
 
 Expected: migration succeeds and all persistence tests PASS.
 
-- [ ] **Step 6: Commit persistence layer**
+- [x] **Step 6: Commit persistence layer**
 
 ```bash
 git add event/backend/app/config.py event/backend/app/models.py event/backend/app/schemas.py event/backend/app/services event/backend/migrations event/backend/tests

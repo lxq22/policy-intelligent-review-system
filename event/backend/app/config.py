@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     bootstrap_demo_data: bool = True
+    storage_root: str = "storage"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
