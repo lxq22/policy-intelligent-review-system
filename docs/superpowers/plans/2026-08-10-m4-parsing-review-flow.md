@@ -34,7 +34,7 @@
 - Consumes: the four Markdown files below `制度审查测试数据集/` whose names begin with `待审查_`.
 - Produces: `generate_all(source_root: Path, output_root: Path) -> list[tuple[Path, Path]]`, with one DOCX/PDF pair per source.
 
-- [ ] **Step 1: Write the failing fixture contract test**
+- [x] **Step 1: Write the failing fixture contract test**
 
 ```python
 def test_generated_docx_and_pdf_have_matching_policy_text(generated_fixture_pairs):
@@ -46,27 +46,27 @@ def test_generated_docx_and_pdf_have_matching_policy_text(generated_fixture_pair
         assert normalize_text(docx_text) == normalize_text(pdf_text)
 ```
 
-- [ ] **Step 2: Run the fixture test and verify RED**
+- [x] **Step 2: Run the fixture test and verify RED**
 
 Run: `cd event/backend && .venv/bin/pytest tests/test_m4_fixtures.py -q`
 
 Expected: FAIL because `scripts/generate_m4_fixtures.py` and generated fixture pairs do not exist.
 
-- [ ] **Step 3: Implement deterministic generation**
+- [x] **Step 3: Implement deterministic generation**
 
 Implement Markdown cleanup that removes the title marker and explanatory blockquote, maps `## 第一章` to a heading, and writes article paragraphs as body text. Create DOCX with explicit Chinese fonts and PDF with an embedded CJK font. Keep source text unchanged after whitespace normalization.
 
-- [ ] **Step 4: Render and inspect all generated documents**
+- [x] **Step 4: Render and inspect all generated documents**
 
 Run the bundled DOCX renderer for every DOCX and Poppler for every PDF. Inspect every rendered page for missing Chinese glyphs, clipping, overlap, or accidental inclusion of Markdown markers.
 
-- [ ] **Step 5: Run the fixture test and verify GREEN**
+- [x] **Step 5: Run the fixture test and verify GREEN**
 
 Run: `cd event/backend && .venv/bin/pytest tests/test_m4_fixtures.py -q`
 
 Expected: PASS for four matching DOCX/PDF pairs.
 
-- [ ] **Step 6: Commit the fixture generator and fixtures**
+- [x] **Step 6: Commit the fixture generator and fixtures**
 
 ```bash
 git add scripts/generate_m4_fixtures.py 制度审查测试数据集 event/backend/tests/test_m4_fixtures.py
