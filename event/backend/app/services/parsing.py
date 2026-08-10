@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import math
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..models import Clause, Regulation, RegulationVersion, TemporaryReviewFile
 from ..parsers import DocumentParseError, parser_for
 from ..parsers.segmenter import ClauseSegmenter, ParsedClause
+from ..retrieval.embeddings import DeterministicEmbeddingProvider
 from .file_storage import FileStorage
 
 
@@ -18,22 +17,10 @@ def _now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-def local_embedding(text: str) -> list[float]:
-    """Deterministic local vector used until a configured domestic model is added."""
-    vector = [0.0] * 256
-    tokens = list(text.strip())
-    tokens.extend(text[index : index + 2] for index in range(max(0, len(text) - 1)))
-    for token in tokens:
-        digest = hashlib.sha256(token.encode("utf-8")).digest()
-        index = digest[0]
-        vector[index] += 1.0 if digest[1] & 1 else -1.0
-    norm = math.sqrt(sum(value * value for value in vector)) or 1.0
-    return [value / norm for value in vector]
-
-
 class ParseService:
     def __init__(self, storage_root: str | Path):
         self.storage = FileStorage(storage_root)
+        self.embedding_provider = DeterministicEmbeddingProvider()
 
     def parse_version(self, db: Session, version_id: int) -> list[Clause]:
         owner = db.get(RegulationVersion, version_id)
@@ -102,8 +89,8 @@ class ParseService:
             db.commit()
             raise
 
-    @staticmethod
     def _clause_rows(
+        self,
         parsed: list[ParsedClause],
         regulation_version_id: int | None,
         temporary_file_id: int | None,
@@ -120,7 +107,7 @@ class ParseService:
                 heading_path=item.heading_path,
                 paragraph_start=item.paragraph_start,
                 paragraph_end=item.paragraph_end,
-                embedding=local_embedding(item.content),
+                embedding=self.embedding_provider.embed(item.content),
             )
             for item in parsed
         ]

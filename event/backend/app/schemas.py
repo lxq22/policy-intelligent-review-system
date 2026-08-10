@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PermissionSet(BaseModel):
@@ -110,6 +110,28 @@ class TemporaryFileOut(BaseModel):
     parse_error: Optional[str] = None
     parsed_at: Optional[datetime] = None
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CandidateRequest(BaseModel):
+    source_type: Literal["regulation", "temporary"]
+    regulation_id: Optional[int] = None
+    temporary_file_id: Optional[int] = None
+    clause_ids: list[int] = Field(min_length=1)
+    comparison_regulation_ids: list[int] = []
+
+
+class CandidateClauseOut(BaseModel):
+    clause_id: int
+    regulation_id: int
+    regulation_name: str
+    version: Optional[str] = None
+    original_no: str
+    content: str
+    heading_path: list[str]
+    score: float
+    evidence: list[str]
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -264,7 +264,7 @@ git commit -m "feat: expose M4 file parsing APIs"
 - Produces: `CandidateService.for_temporary(db, temporary_file_id, clause_ids, comparison_regulation_ids) -> list[CandidateClause]`.
 - Produces: `POST /api/v1/reviews/candidates`.
 
-- [ ] **Step 1: Write failing retrieval tests**
+- [x] **Step 1: Write failing retrieval tests**
 
 ```python
 def test_rrf_merges_and_labels_keyword_and_vector_evidence():
@@ -275,27 +275,27 @@ def test_rrf_merges_and_labels_keyword_and_vector_evidence():
 
 Add database tests proving deleted, unrelated, and parse-failed regulations are excluded; automatic and manual visible relations are accepted; temporary sources search only explicitly selected comparison regulations.
 
-- [ ] **Step 2: Run retrieval tests and verify RED**
+- [x] **Step 2: Run retrieval tests and verify RED**
 
 Run: `cd event/backend && .venv/bin/pytest tests/test_candidate_retrieval.py -q`
 
 Expected: FAIL because retrieval modules do not exist.
 
-- [ ] **Step 3: Implement tokenizer, deterministic embeddings, and RRF**
+- [x] **Step 3: Implement tokenizer, deterministic embeddings, and RRF**
 
 Use jieba tokens plus character bigrams. Hash features with SHA-256 into 256 signed buckets, L2-normalize, and label the model `local-hash-zh-v1`. Keep the provider protocol compatible with a later Zhipu adapter.
 
-- [ ] **Step 4: Implement scoped candidate service and API**
+- [x] **Step 4: Implement scoped candidate service and API**
 
 Resolve formal relation scope through `collect_relations`; calculate keyword and cosine rankings only inside that scope. Validate all requested source clauses before ranking and return no configurable threshold as a business promise.
 
-- [ ] **Step 5: Run retrieval tests and verify GREEN**
+- [x] **Step 5: Run retrieval tests and verify GREEN**
 
 Run: `cd event/backend && .venv/bin/pytest tests/test_candidate_retrieval.py -q`
 
 Expected: all RRF, scoping, exclusion, and temporary-source tests PASS.
 
-- [ ] **Step 6: Commit retrieval behavior**
+- [x] **Step 6: Commit retrieval behavior**
 
 ```bash
 git add event/backend/app/retrieval event/backend/app/services/candidates.py event/backend/app/api/review_routes.py event/backend/app/config.py event/backend/app/main.py event/backend/tests/test_candidate_retrieval.py event/backend/pyproject.toml
