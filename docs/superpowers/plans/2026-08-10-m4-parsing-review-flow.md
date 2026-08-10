@@ -318,7 +318,7 @@ git commit -m "feat: recall relationship-scoped candidate clauses"
 - Accepts dimensions only from `semantic`, `rule`, `conflict`, and `consistency`.
 - Stores selected clause and candidate snapshots as JSON arrays containing IDs, names, versions, original numbers, locations, and text.
 
-- [ ] **Step 1: Write failing record tests**
+- [x] **Step 1: Write failing record tests**
 
 ```python
 def test_repeated_review_gets_independent_immutable_number_and_snapshot(reviewer_client, parsed_regulation):
@@ -333,27 +333,27 @@ def test_repeated_review_gets_independent_immutable_number_and_snapshot(reviewer
 
 Also test invalid dimensions, source-clause ownership, candidate-scope validation, conflict requiring selected candidates, non-conflict ignoring candidate input, and historical snapshots surviving reparse.
 
-- [ ] **Step 2: Run review tests and verify RED**
+- [x] **Step 2: Run review tests and verify RED**
 
 Run: `cd event/backend && .venv/bin/pytest tests/test_review_records.py -q`
 
 Expected: FAIL because review creation behavior is absent.
 
-- [ ] **Step 3: Implement model expansion and transactional numbering**
+- [x] **Step 3: Implement model expansion and transactional numbering**
 
 Add a unique constraint on `record_code`, generate `显示名称-YYYYMMDD-NN`, and retry the transaction on a unique conflict. Set `completed_at` at creation because M4 stores a completed input-preparation result, not an asynchronous task.
 
-- [ ] **Step 4: Implement record routes and strict input validation**
+- [x] **Step 4: Implement record routes and strict input validation**
 
 Serialize only confirmed M4 fields. Keep report issue counts at zero and do not generate M5 rows.
 
-- [ ] **Step 5: Run review tests and verify GREEN**
+- [x] **Step 5: Run review tests and verify GREEN**
 
 Run: `cd event/backend && .venv/bin/pytest tests/test_review_records.py -q`
 
 Expected: all numbering, validation, snapshot, and repeat-review tests PASS.
 
-- [ ] **Step 6: Commit review record behavior**
+- [x] **Step 6: Commit review record behavior**
 
 ```bash
 git add event/backend/app/models.py event/backend/app/schemas.py event/backend/app/api/review_routes.py event/backend/app/services/reviews.py event/backend/migrations/versions/20260810_0003_m4_review_records.py event/backend/tests/test_review_records.py

@@ -215,7 +215,18 @@ class ReviewRecord(Base):
     __tablename__ = "review_records"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    record_code: Mapped[str] = mapped_column(String(255), index=True)
+    record_code: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     regulation_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    temporary_file_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("temporary_review_files.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     regulation_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    source_type: Mapped[str] = mapped_column(String(20), default="regulation")
+    dimensions: Mapped[list[str]] = mapped_column(JSON, default=list)
+    source_snapshot: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    candidate_snapshot: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    created_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

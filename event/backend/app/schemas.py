@@ -136,6 +136,35 @@ class CandidateClauseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+ReviewDimension = Literal["semantic", "rule", "conflict", "consistency"]
+
+
+class ReviewCreate(BaseModel):
+    source_type: Literal["regulation", "temporary"]
+    regulation_id: Optional[int] = None
+    temporary_file_id: Optional[int] = None
+    clause_ids: list[int] = Field(min_length=1)
+    dimensions: list[ReviewDimension] = Field(min_length=1)
+    candidate_clause_ids: list[int] = []
+    comparison_regulation_ids: list[int] = []
+
+
+class ReviewRecordOut(BaseModel):
+    id: int
+    record_code: str
+    source_type: str
+    regulation_id: Optional[int] = None
+    temporary_file_id: Optional[int] = None
+    regulation_name: Optional[str] = None
+    dimensions: list[str]
+    source_snapshot: list[dict]
+    candidate_snapshot: list[dict]
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class RelationOut(BaseModel):
     id: str
     type: str
