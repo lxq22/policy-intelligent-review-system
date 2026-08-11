@@ -1,7 +1,7 @@
 [project]
 name = "policy-intelligent-review-api"
-version = "0.4.0"
-description = "制度智能审查系统 M4 解析与审查流程 API"
+version = "0.5.0"
+description = "制度智能审查系统 M5 四维智能审查 API"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.16,<2",

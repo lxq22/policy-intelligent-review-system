@@ -198,7 +198,7 @@ flowchart LR
 - Embedding Model。
 - 超时和重试参数。
 
-第一版采用 OpenAI 兼容的请求结构，但不在业务代码中写死具体供应商和模型名称。用户可根据已有 API 账号配置供应商；切换供应商不影响业务层。
+第一版采用国内大模型厂商普遍支持的 Chat Completions 请求结构，但不在业务逻辑中写死供应商。M5 默认配置智谱 GLM-4.7，后续可切换 DeepSeek 等国内供应商而不影响审查业务层。
 
 ### 10.2 审查编排
 
@@ -257,7 +257,7 @@ flowchart LR
 | BLOCK-001 | Vue 3 + TypeScript + Vite + Element Plus + Vue Router + Pinia | 已解除 |
 | BLOCK-002 | Python 3.12 + FastAPI + Pydantic + SQLAlchemy 2 + Alembic；REST JSON + SSE | 已解除 |
 | BLOCK-003 | PostgreSQL 18 + pgvector；原文件使用本地持久化卷；PostgreSQL 全文检索与向量混合召回 | 已解除 |
-| BLOCK-004 | 供应商中立适配层；OpenAI 兼容调用结构；具体 API 地址和模型由环境配置 | 已解除；具体供应商和模型属于部署配置 |
+| BLOCK-004 | 国内大模型兼容适配层；Chat Completions 调用结构；具体 API 地址和模型由环境配置 | 已解除；M5 使用智谱 GLM-4.7 |
 
 `BLOCK-005` 至 `BLOCK-008` 不属于 M1，继续保持未解决状态。
 
@@ -269,7 +269,7 @@ flowchart LR
 2. 已确认：后端采用 Python 与 FastAPI 技术组合。
 3. 已确认：PostgreSQL 与 pgvector 同时承担业务数据、全文索引和向量存储。
 4. 已确认：原始制度文件存放在本地持久化文件卷。
-5. 已确认：大模型使用供应商中立、OpenAI 兼容适配层，具体供应商和模型通过环境变量配置。
+5. 已确认：只使用国内大模型供应商；采用 Chat Completions 兼容适配层，M5 默认使用智谱 GLM-4.7，具体地址和模型通过环境变量配置。
 6. 已确认：使用 Docker Compose 完成本地开发环境和第一版部署。
 
 确认结果：M1 完成，`BLOCK-001` 至 `BLOCK-004` 已解决，M2 正式解除技术阻塞。
