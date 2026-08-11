@@ -42,17 +42,79 @@ describe('ReviewStartView M4 flow', () => {
     const wrapper = shallowMount(ReviewStartView, { global: { plugins: [ElementPlus] } })
     const vm = wrapper.vm as unknown as {
       sourceType: 'library' | 'temporary'
-      selectedFile?: File
+      uploadState: string
       step: number
-      next: () => Promise<void>
+      selectUpload: (upload: { raw: File }) => Promise<void>
     }
     vm.sourceType = 'temporary'
-    vm.selectedFile = new File(['pdf'], '扫描制度.pdf', { type: 'application/pdf' })
 
-    await vm.next()
+    await vm.selectUpload({ raw: new File(['pdf'], '扫描制度.pdf', { type: 'application/pdf' }) })
 
     expect(vm.step).toBe(0)
+    expect(vm.uploadState).toBe('error')
     expect(message).toHaveBeenCalledWith('扫描 PDF 不受支持')
+  })
+
+  it('uploads immediately and previews parsed clauses before the next step', async () => {
+    const store = useDataStore()
+    const file = new File(['正文'], '待审制度.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+    const upload = vi.spyOn(store, 'uploadTemporaryFile').mockResolvedValue({
+      id: 12,
+      originalName: file.name,
+      parseStatus: '解析成功',
+      clauses: [{ id: 21, originalNo: '第一条', title: '总则', content: '本制度适用于当前单位。', level: 'article', location: '第一章 > 第一条' }],
+    })
+    const wrapper = shallowMount(ReviewStartView, {
+      global: {
+        plugins: [ElementPlus],
+        stubs: {
+          PageHeader: { template: '<div><slot name="actions" /></div>' },
+          ElUpload: { template: '<div><slot /><slot name="tip" /></div>' },
+          SelectedFileCard: { props: ['file'], template: '<div>{{ file.name }}</div>' },
+          ElCollapse: { template: '<div><slot /></div>' },
+          ElCollapseItem: { template: '<div><slot name="title" /><slot /></div>' },
+        },
+      },
+    })
+    const vm = wrapper.vm as unknown as {
+      sourceType: 'library' | 'temporary'
+      selectUpload: (upload: { raw: File }) => Promise<void>
+    }
+    vm.sourceType = 'temporary'
+
+    await vm.selectUpload({ raw: file })
+    await wrapper.vm.$nextTick()
+
+    expect(upload).toHaveBeenCalledWith(file)
+    expect(wrapper.text()).toContain('待审制度.docx')
+    expect(wrapper.text()).toContain('解析成功，共 1 条')
+    expect(wrapper.text()).toContain('第一条')
+    expect(wrapper.text()).toContain('本制度适用于当前单位。')
+  })
+
+  it('clears old parsed and selected data when removing a temporary file', async () => {
+    const wrapper = shallowMount(ReviewStartView, { global: { plugins: [ElementPlus] } })
+    const vm = wrapper.vm as unknown as {
+      selectedFile?: File
+      temporaryFile?: object
+      selectedClauses: number[]
+      selectedCandidates: number[]
+      comparisonRegulationIds: number[]
+      removeTemporaryFile: () => void
+    }
+    vm.selectedFile = new File(['正文'], '旧制度.docx')
+    vm.temporaryFile = { id: 1 }
+    vm.selectedClauses = [11]
+    vm.selectedCandidates = [22]
+    vm.comparisonRegulationIds = [3]
+
+    vm.removeTemporaryFile()
+
+    expect(vm.selectedFile).toBeUndefined()
+    expect(vm.temporaryFile).toBeUndefined()
+    expect(vm.selectedClauses).toEqual([])
+    expect(vm.selectedCandidates).toEqual([])
+    expect(vm.comparisonRegulationIds).toEqual([])
   })
 
   it('does not advance without clauses, dimensions, or conflict candidates', async () => {

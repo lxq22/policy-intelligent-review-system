@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { Check, Document, UploadFilled } from '@element-plus/icons-vue'
 import PageHeader from '../../components/PageHeader.vue'
+import SelectedFileCard from '../../components/SelectedFileCard.vue'
 import { useDataStore } from '../../stores/data'
 import type { DimensionKey, ReviewCreateInput, TemporaryReviewFile } from '../../types'
 
@@ -20,6 +21,8 @@ const selectedCandidates = ref<number[]>([])
 const comparisonRegulationIds = ref<number[]>([])
 const selectedFile = ref<File>()
 const temporaryFile = ref<TemporaryReviewFile>()
+const uploadState = ref<'idle' | 'parsing' | 'success' | 'error'>('idle')
+const uploadError = ref('')
 const runState = ref<'idle' | 'running' | 'success' | 'failed'>('idle')
 const resultId = ref('')
 const busy = ref(false)
@@ -44,11 +47,48 @@ function selectRegulation(id: number) {
   selectedCandidates.value = []
 }
 
-function selectUpload(upload: UploadFile) {
-  selectedFile.value = upload.raw
-  temporaryFile.value = undefined
+function clearReviewSelections() {
   selectedClauses.value = []
   selectedCandidates.value = []
+  comparisonRegulationIds.value = []
+  store.candidateClauses = []
+}
+
+function selectSource(type: 'library' | 'temporary') {
+  if (sourceType.value === type) return
+  sourceType.value = type
+  clearReviewSelections()
+  if (type === 'library') {
+    selectedFile.value = undefined
+    temporaryFile.value = undefined
+    uploadState.value = 'idle'
+    uploadError.value = ''
+  }
+}
+
+async function selectUpload(upload: UploadFile | { raw: File }) {
+  if (!upload.raw) return
+  selectedFile.value = upload.raw
+  temporaryFile.value = undefined
+  uploadState.value = 'parsing'
+  uploadError.value = ''
+  clearReviewSelections()
+  try {
+    temporaryFile.value = await store.uploadTemporaryFile(upload.raw)
+    uploadState.value = 'success'
+  } catch (error) {
+    uploadState.value = 'error'
+    uploadError.value = error instanceof Error ? error.message : '文件解析失败'
+    ElMessage.error(uploadError.value)
+  }
+}
+
+function removeTemporaryFile() {
+  selectedFile.value = undefined
+  temporaryFile.value = undefined
+  uploadState.value = 'idle'
+  uploadError.value = ''
+  clearReviewSelections()
 }
 
 function toggleDimension(key: DimensionKey) {
@@ -79,7 +119,9 @@ async function next() {
         await store.loadClauses(regulationId.value)
       } else {
         if (!selectedFile.value) return ElMessage.warning('请选择待审文件')
-        temporaryFile.value = await store.uploadTemporaryFile(selectedFile.value)
+        if (uploadState.value === 'parsing') return ElMessage.warning('文件正在解析，请稍候')
+        if (uploadState.value !== 'success' || !temporaryFile.value) return ElMessage.warning('请先完成文件解析')
+        if (!temporaryFile.value.clauses.length) return ElMessage.warning('文件中没有可选择的条款')
       }
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '文件解析失败')
@@ -150,10 +192,10 @@ onMounted(async () => {
         <div class="panel-body">
           <template v-if="step === 0">
             <div class="choice-grid">
-              <div class="choice-card" :class="{selected: sourceType==='library'}" @click="sourceType='library'">
+              <div class="choice-card" :class="{selected: sourceType==='library'}" @click="selectSource('library')">
                 <el-icon size="22" color="#0f8b85"><Document /></el-icon><h3>从制度库选择</h3><p>使用已保存且解析成功的制度，历史审查会回到该制度详情。</p><el-icon v-if="sourceType==='library'" class="check"><Check /></el-icon>
               </div>
-              <div class="choice-card" :class="{selected: sourceType==='temporary'}" @click="sourceType='temporary'">
+              <div class="choice-card" :class="{selected: sourceType==='temporary'}" @click="selectSource('temporary')">
                 <el-icon size="22" color="#0f8b85"><UploadFilled /></el-icon><h3>临时上传待审文件</h3><p>支持 .docx 和普通文字 PDF，文件不会进入正式制度库。</p><el-icon v-if="sourceType==='temporary'" class="check"><Check /></el-icon>
               </div>
             </div>
@@ -169,11 +211,26 @@ onMounted(async () => {
               </div>
             </div>
             <div v-else class="subsection">
-              <el-upload drag action="#" :auto-upload="false" :limit="1" accept=".docx,.pdf" :on-change="selectUpload">
-                <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-                <div class="el-upload__text">拖放文件到这里，或 <em>点击选择</em></div>
+              <el-upload class="temporary-upload" drag action="#" :auto-upload="false" :show-file-list="false" :disabled="uploadState==='parsing'" accept=".docx,.pdf" :on-change="selectUpload">
+                <SelectedFileCard v-if="selectedFile" :file="selectedFile" :status="uploadState === 'idle' ? 'ready' : uploadState" :message="uploadState === 'success' ? `解析成功，共 ${temporaryFile?.clauses.length || 0} 条` : uploadError" @remove="removeTemporaryFile" />
+                <template v-else>
+                  <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+                  <div class="el-upload__text">拖放文件到这里，或 <em>点击选择</em></div>
+                </template>
                 <template #tip><div class="el-upload__tip">不接受 .doc、扫描 PDF、图片或包含 OCR 需求的文件。</div></template>
               </el-upload>
+              <div v-if="temporaryFile && uploadState === 'success'" class="clause-preview subsection">
+                <div class="subsection-head">
+                  <div><h3>解析成功，共 {{ temporaryFile.clauses.length }} 条</h3><p class="muted">请先检查条款是否完整；下一步再选择需要审查的条款。</p></div>
+                  <el-tag type="success" effect="plain">解析成功</el-tag>
+                </div>
+                <el-collapse class="clause-collapse">
+                  <el-collapse-item v-for="clause in temporaryFile.clauses" :key="clause.id" :name="clause.id">
+                    <template #title><div class="clause-title"><strong>{{ clause.originalNo }} {{ clause.title }}</strong><span>{{ clause.location }}</span></div></template>
+                    <p class="clause-content">{{ clause.content }}</p>
+                  </el-collapse-item>
+                </el-collapse>
+              </div>
               <h3 class="section-title" style="margin-top:22px">选择对比制度</h3>
               <p class="muted">仅在制度冲突维度中，从这里选定的制度内筛查候选条款。</p>
               <el-select v-model="comparisonRegulationIds" multiple filterable placeholder="可选择一个或多个制度" style="width:100%; margin-top:10px">
@@ -239,3 +296,24 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.temporary-upload { width: 100%; }
+.temporary-upload :deep(.el-upload), .temporary-upload :deep(.el-upload-dragger) { width: 100%; }
+.temporary-upload :deep(.el-upload-dragger) { min-height: 180px; padding: 22px; display: flex; flex-direction: column; justify-content: center; }
+.temporary-upload :deep(.selected-file) { width: 100%; }
+.clause-preview { padding: 18px; border: 1px solid #dce8e9; border-radius: 10px; background: #fbfdfd; }
+.clause-preview .subsection-head { align-items: flex-start; }
+.clause-preview .subsection-head p { margin: 6px 0 0; }
+.clause-collapse { border-top: 0; }
+.clause-title { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: space-between; gap: 16px; padding-right: 12px; }
+.clause-title strong { color: #18323f; }
+.clause-title span { overflow: hidden; color: #7a8d97; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.clause-content { margin: 0; padding: 4px 12px 10px 0; color: #405a67; font-family: "Songti SC", serif; line-height: 1.9; }
+@media (max-width: 640px) {
+  .temporary-upload :deep(.el-upload-dragger) { min-height: 150px; padding: 14px; }
+  .clause-title { display: block; padding: 8px 8px 8px 0; }
+  .clause-title strong, .clause-title span { display: block; }
+  .clause-title span { margin-top: 4px; }
+}
+</style>
