@@ -1,5 +1,6 @@
 import json
-from queue import Queue
+import logging
+from queue import Empty, Queue
 from threading import Thread
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,6 +26,8 @@ from ..services.review_execution import ReviewExecutionError, ReviewExecutionSer
 from ..services.reviews import ReviewService
 
 router = APIRouter(prefix="/reviews", tags=["审查"])
+logger = logging.getLogger(__name__)
+SSE_HEARTBEAT_SECONDS = 15
 
 
 @router.post("/candidates", response_model=list[CandidateClauseOut])
@@ -120,8 +123,12 @@ def execute_review(
                         )
                     )
                 except (ReviewExecutionError, ChatProviderError) as exc:
+                    logger.warning("review execution failed review_id=%s: %s", review_id, exc)
                     events.put(("failed", {"review_id": review_id, "message": str(exc)}))
                 except Exception:
+                    logger.exception(
+                        "unexpected review execution failure review_id=%s", review_id
+                    )
                     events.put(
                         (
                             "failed",
@@ -129,14 +136,23 @@ def execute_review(
                         )
                     )
 
-        yield _sse("started", {"review_id": review_id, "message": "开始智能审查"})
         worker = Thread(target=run, daemon=True)
         worker.start()
-        while True:
-            event, data = events.get()
-            yield _sse(event, data)
-            if event in {"completed", "failed"}:
-                break
+        try:
+            yield _sse("started", {"review_id": review_id, "message": "开始智能审查"})
+            while True:
+                try:
+                    event, data = events.get(timeout=SSE_HEARTBEAT_SECONDS)
+                except Empty:
+                    yield _sse("heartbeat", {"review_id": review_id})
+                    continue
+                yield _sse(event, data)
+                if event in {"completed", "failed"}:
+                    break
+        finally:
+            # Keep the request-scoped model provider alive until the worker finishes,
+            # even if the browser disconnects midway through a long model call.
+            worker.join()
 
     return StreamingResponse(
         stream(),

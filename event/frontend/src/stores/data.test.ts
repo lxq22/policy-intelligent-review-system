@@ -229,6 +229,7 @@ describe('M4 data store', () => {
   it('consumes live review progress and marks the record report as available', async () => {
     const stream = [
       'event: started\ndata: {"message":"开始智能审查"}\n\n',
+      'event: heartbeat\ndata: {"review_id":9}\n\n',
       'event: dimension\ndata: {"message":"semantic"}\n\n',
       'event: completed\ndata: {"problem_count":3}\n\n',
     ].join('')

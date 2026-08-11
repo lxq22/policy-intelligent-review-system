@@ -1,3 +1,5 @@
+import time
+
 from app.main import app
 from app.models import ReviewIssue, ReviewRecord, User
 from app.providers.chat import get_chat_provider
@@ -5,6 +7,12 @@ from app.providers.chat import get_chat_provider
 
 class FakeProvider:
     def complete(self, messages, response_format=None):
+        return {"issues": []}
+
+
+class SlowProvider:
+    def complete(self, messages, response_format=None):
+        time.sleep(0.05)
         return {"issues": []}
 
 
@@ -57,6 +65,25 @@ def test_execute_stream_creates_report_and_detail_counts_problems(reviewer_clien
     assert detail.json()["has_report"] is True
     assert issues.status_code == 200
     assert issues.json()[0]["original"] == "应及时处理。"
+
+
+def test_execute_stream_sends_heartbeat_while_model_is_slow(
+    reviewer_client, monkeypatch
+):
+    from app.database import SessionLocal
+
+    with SessionLocal() as db:
+        review_id = create_record(db, "API-M5-HEARTBEAT", "职责主体明确。")
+    app.dependency_overrides[get_chat_provider] = lambda: SlowProvider()
+    monkeypatch.setattr("app.api.review_routes.SSE_HEARTBEAT_SECONDS", 0.01)
+    try:
+        response = reviewer_client.post(f"/api/v1/reviews/{review_id}/execute")
+    finally:
+        app.dependency_overrides.pop(get_chat_provider, None)
+
+    assert response.status_code == 200
+    assert "event: heartbeat" in response.text
+    assert "event: completed" in response.text
 
 
 def test_issue_actions_are_persisted_with_actor_and_do_not_leak_between_reports(reviewer_client):

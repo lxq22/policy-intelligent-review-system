@@ -45,8 +45,8 @@ class OpenAICompatibleChatProvider:
         api_key: str,
         model: str,
         timeout_seconds: float = 120,
-        thinking_enabled: bool = True,
-        max_tokens: int = 8192,
+        thinking_enabled: bool = False,
+        max_tokens: int = 4096,
         client: httpx.Client | None = None,
     ) -> None:
         self.api_base_url = api_base_url.rstrip("/")
@@ -74,8 +74,9 @@ class OpenAICompatibleChatProvider:
         }
         if response_format:
             payload["response_format"] = response_format
-        if self.thinking_enabled:
-            payload["thinking"] = {"type": "enabled"}
+        payload["thinking"] = {
+            "type": "enabled" if self.thinking_enabled else "disabled"
+        }
 
         try:
             response = self.client.post(

@@ -59,6 +59,30 @@ def test_glm_provider_rejects_missing_key_before_network_request():
         provider.complete([{"role": "user", "content": "test"}])
 
 
+def test_glm_provider_explicitly_disables_thinking_for_fast_review_mode():
+    chat = _provider_module()
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["json"] = __import__("json").loads(request.content)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"issues": []}'}}]},
+        )
+
+    provider = chat.OpenAICompatibleChatProvider(
+        api_base_url="https://open.bigmodel.cn/api/paas/v4",
+        api_key="test-secret",
+        model="glm-4.7",
+        thinking_enabled=False,
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    provider.complete([{"role": "user", "content": "审查第三条"}])
+
+    assert captured["json"]["thinking"] == {"type": "disabled"}
+
+
 @pytest.mark.parametrize("status", [401, 403])
 def test_glm_provider_reports_authentication_failure_without_leaking_key(status):
     chat = _provider_module()

@@ -28,9 +28,9 @@ services:
       LLM_API_BASE_URL: ${LLM_API_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_CHAT_MODEL: ${LLM_CHAT_MODEL:-glm-4.7}
-      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-120}
-      LLM_THINKING_ENABLED: ${LLM_THINKING_ENABLED:-true}
-      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-8192}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-600}
+      LLM_THINKING_ENABLED: ${LLM_THINKING_ENABLED:-false}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
     depends_on:
       db:
         condition: service_healthy

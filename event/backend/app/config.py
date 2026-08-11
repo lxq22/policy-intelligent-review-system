@@ -17,9 +17,9 @@ class Settings(BaseSettings):
     llm_api_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
     llm_api_key: str = ""
     llm_chat_model: str = "glm-4.7"
-    llm_timeout_seconds: float = 120
-    llm_thinking_enabled: bool = True
-    llm_max_tokens: int = 8192
+    llm_timeout_seconds: float = 600
+    llm_thinking_enabled: bool = False
+    llm_max_tokens: int = 4096
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
