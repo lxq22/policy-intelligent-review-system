@@ -3,8 +3,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, EditPen, Plus, Refresh, Search, View } from '@element-plus/icons-vue'
+import type { UploadFile } from 'element-plus'
 import PageHeader from '../../components/PageHeader.vue'
 import PermissionButton from '../../components/PermissionButton.vue'
+import SelectedFileCard from '../../components/SelectedFileCard.vue'
 import { useDataStore } from '../../stores/data'
 import type { Regulation } from '../../types'
 
@@ -13,6 +15,8 @@ const store = useDataStore()
 const loading = ref(true)
 const dialogVisible = ref(false)
 const editingId = ref<number>()
+const initialFile = ref<File>()
+const saving = ref(false)
 const filters = reactive({ keyword: '', department: '', hierarchy: '', status: '' })
 const form = reactive<Partial<Regulation>>({
   name: '',
@@ -50,6 +54,7 @@ const relationCount = computed(() => store.activeRegulations.reduce((sum, item) 
 
 function resetForm() {
   editingId.value = undefined
+  initialFile.value = undefined
   Object.assign(form, {
     name: '',
     code: '',
@@ -83,14 +88,32 @@ async function save() {
     ElMessage.warning('为了便于识别，请填写制度名称')
     return
   }
+  if (!editingId.value && !initialFile.value) {
+    ElMessage.warning('请上传制度文件')
+    return
+  }
+  if (saving.value) return
+  saving.value = true
   try {
-    const created = await store.saveRegulation({ ...form, id: editingId.value, name: form.name })
+    const created = editingId.value
+      ? await store.saveRegulation({ ...form, id: editingId.value, name: form.name })
+      : await store.createRegulationWithFile({ ...form, name: form.name }, initialFile.value!)
     dialogVisible.value = false
-    ElMessage.success(editingId.value ? '制度信息已更新' : '制度已保存，等待后续解析流程')
+    ElMessage.success(editingId.value ? '制度信息已更新' : '制度已上传并解析成功')
     if (!editingId.value && created) router.push(`/reviewer/regulations/${created.id}`)
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '保存失败')
+  } finally {
+    saving.value = false
   }
+}
+
+function selectInitialFile(upload: UploadFile) {
+  if (upload.raw) initialFile.value = upload.raw
+}
+
+function removeInitialFile() {
+  initialFile.value = undefined
 }
 
 async function remove(item: Regulation) {
@@ -200,11 +223,30 @@ function clearFilters() {
           <el-col :span="8"><el-form-item label="生效日期"><el-date-picker v-model="form.effectiveDate" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="失效日期"><el-date-picker v-model="form.expiryDate" value-format="YYYY-MM-DD" clearable style="width:100%" /></el-form-item></el-col>
           <el-col :span="8"><el-form-item label="生效状态"><el-select v-model="form.status" style="width:100%"><el-option label="生效中" value="生效中" /><el-option label="已失效" value="已失效" /></el-select></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="制度文件"><el-input v-model="form.fileName" placeholder=".docx 或普通文字 PDF" :disabled="Boolean(editingId)" /></el-form-item></el-col>
+          <el-col v-if="!editingId" :span="24">
+            <el-form-item label="制度文件（必填）">
+              <el-upload class="initial-file-upload" drag action="#" :auto-upload="false" :show-file-list="false" accept=".docx,.pdf" :on-change="selectInitialFile">
+                <SelectedFileCard v-if="initialFile" :file="initialFile" @remove="removeInitialFile" />
+                <template v-else>
+                  <el-icon class="el-icon--upload"><Plus /></el-icon>
+                  <div class="el-upload__text">拖放制度文件到这里，或 <em>点击选择</em></div>
+                  <div class="upload-hint">支持 .docx 和普通文字 PDF</div>
+                </template>
+              </el-upload>
+            </el-form-item>
+          </el-col>
           <el-col :span="24"><el-form-item label="适用范围"><el-input v-model="form.scope" type="textarea" :rows="2" /></el-form-item></el-col>
         </el-row>
       </el-form>
-      <template #footer><el-button @click="dialogVisible=false">取消</el-button><el-button type="primary" @click="save">保存</el-button></template>
+      <template #footer><el-button @click="dialogVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="save">{{ editingId ? '保存' : '保存并解析' }}</el-button></template>
     </el-dialog>
   </div>
 </template>
+
+<style scoped>
+.initial-file-upload { width: 100%; }
+.initial-file-upload :deep(.el-upload), .initial-file-upload :deep(.el-upload-dragger) { width: 100%; }
+.initial-file-upload :deep(.el-upload-dragger) { min-height: 122px; padding: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.initial-file-upload :deep(.selected-file) { margin: -4px; width: calc(100% + 8px); }
+.upload-hint { margin-top: 8px; color: #8a9aa3; font-size: 12px; }
+</style>
