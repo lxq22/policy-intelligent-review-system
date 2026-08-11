@@ -161,6 +161,9 @@ class ReviewRecordOut(BaseModel):
     candidate_snapshot: list[dict]
     created_at: datetime
     completed_at: Optional[datetime] = None
+    created_by_name: Optional[str] = None
+    problem_count: int = 0
+    has_report: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
