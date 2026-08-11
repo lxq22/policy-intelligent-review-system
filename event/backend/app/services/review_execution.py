@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import wraps
+from threading import Lock
 
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -14,6 +16,19 @@ from ..reviewing.prompts import build_messages
 from ..reviewing.schemas import DimensionResult, IssueDraft
 
 ProgressCallback = Callable[[str, str], None]
+_execution_locks_guard = Lock()
+_execution_locks: dict[int, Lock] = {}
+
+
+def _single_execution_per_record(method):
+    @wraps(method)
+    def synchronized(self, db, review_id, *args, **kwargs):
+        with _execution_locks_guard:
+            lock = _execution_locks.setdefault(review_id, Lock())
+        with lock:
+            return method(self, db, review_id, *args, **kwargs)
+
+    return synchronized
 
 
 class ReviewExecutionError(RuntimeError):
@@ -21,6 +36,7 @@ class ReviewExecutionError(RuntimeError):
 
 
 class ReviewExecutionService:
+    @_single_execution_per_record
     def execute(
         self,
         db: Session,
@@ -32,6 +48,7 @@ class ReviewExecutionService:
             select(ReviewRecord)
             .options(selectinload(ReviewRecord.issues))
             .where(ReviewRecord.id == review_id)
+            .with_for_update()
         )
         if record is None:
             raise ReviewExecutionError("审查记录不存在")
@@ -148,13 +165,23 @@ class ReviewExecutionService:
         source = source_by_id[draft.source_clause_id]
         details = dict(draft.details)
         if dimension == "conflict" and draft.evidence_clause_ids:
-            evidence = candidate_by_id[draft.evidence_clause_ids[0]]
+            evidence_items = [candidate_by_id[item] for item in draft.evidence_clause_ids]
+            evidence = evidence_items[0]
             details.update(
                 {
                     "comparison_clause_id": evidence["clause_id"],
                     "comparison_regulation_name": evidence["regulation_name"],
                     "comparison_original": evidence["text"],
                     "comparison_location": evidence["location"],
+                    "comparison_evidence": [
+                        {
+                            "clause_id": item["clause_id"],
+                            "regulation_name": item["regulation_name"],
+                            "original": item["text"],
+                            "location": item["location"],
+                        }
+                        for item in evidence_items
+                    ],
                 }
             )
         elif draft.evidence_clause_ids:

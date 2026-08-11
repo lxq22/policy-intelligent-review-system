@@ -259,4 +259,21 @@ describe('M4 data store', () => {
     expect(record.hasReport).toBe(true)
     expect(record.problemCount).toBe(3)
   })
+
+  it('does not mark a report successful when the progress stream ends early', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(
+      'event: started\ndata: {"message":"开始智能审查"}\n\n',
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+    ))
+    const store = useDataStore()
+    const record = {
+      id: '中断测试-01', internalId: 10, regulationId: 1, regulationName: '中断测试',
+      clauseCount: 1, dimensions: ['semantic' as const], createdBy: '李明',
+      createdAt: '', completedAt: '', problemCount: 0, hasReport: false,
+    }
+
+    await expect(store.executeReview(record)).rejects.toThrow('连接中断')
+    expect(record.hasReport).toBe(false)
+    expect(record.problemCount).toBe(0)
+  })
 })

@@ -1,4 +1,5 @@
 import json
+from collections.abc import Generator
 from typing import Any, Protocol
 
 import httpx
@@ -104,10 +105,13 @@ class OpenAICompatibleChatProvider:
             raise ChatProviderResponseError("GLM 返回的 JSON 顶层必须是对象")
         return result
 
+    def close(self) -> None:
+        self.client.close()
 
-def get_chat_provider() -> OpenAICompatibleChatProvider:
+
+def get_chat_provider() -> Generator[OpenAICompatibleChatProvider, None, None]:
     settings = get_settings()
-    return OpenAICompatibleChatProvider(
+    provider = OpenAICompatibleChatProvider(
         api_base_url=settings.llm_api_base_url,
         api_key=settings.llm_api_key,
         model=settings.llm_chat_model,
@@ -115,3 +119,7 @@ def get_chat_provider() -> OpenAICompatibleChatProvider:
         thinking_enabled=settings.llm_thinking_enabled,
         max_tokens=settings.llm_max_tokens,
     )
+    try:
+        yield provider
+    finally:
+        provider.close()

@@ -1,4 +1,7 @@
 import pytest
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+from time import sleep
 from sqlalchemy import select
 
 from app.models import ReviewIssue, ReviewRecord
@@ -162,3 +165,50 @@ def test_failed_dimension_rolls_back_all_partial_results(db):
     assert list(db.scalars(select(ReviewIssue).where(ReviewIssue.review_record_id == record.id))) == []
     db.refresh(record)
     assert record.completed_at is None
+
+
+def test_concurrent_execution_runs_model_once_and_does_not_duplicate_issues(db):
+    from app.database import SessionLocal
+    from app.services.review_execution import ReviewExecutionService
+
+    record = make_record(db, ["semantic"])
+
+    class SlowProvider:
+        def __init__(self):
+            self.calls = 0
+            self.guard = Lock()
+
+        def complete(self, messages, response_format=None):
+            with self.guard:
+                self.calls += 1
+            sleep(0.15)
+            return {
+                "issues": [
+                    {
+                        "source_clause_id": 11,
+                        "explanation": "职责主体可能不明确。",
+                        "consequence": "可能发生职责推诿。",
+                        "suggestion": "明确具体责任部门。",
+                        "insufficient_evidence": True,
+                        "evidence_clause_ids": [],
+                        "details": {"ambiguous_expression": "业务部门"},
+                    }
+                ]
+            }
+
+    provider = SlowProvider()
+
+    def execute_once():
+        with SessionLocal() as session:
+            return len(ReviewExecutionService().execute(session, record.id, provider))
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        counts = list(executor.map(lambda _: execute_once(), range(2)))
+
+    db.expire_all()
+    stored = list(
+        db.scalars(select(ReviewIssue).where(ReviewIssue.review_record_id == record.id))
+    )
+    assert provider.calls == 1
+    assert counts == [2, 2]
+    assert len(stored) == 2  # 本地“及时” + 1 条模型问题，不重复

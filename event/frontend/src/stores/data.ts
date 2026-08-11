@@ -566,12 +566,20 @@ export const useDataStore = defineStore('data', () => {
     if (!record.internalId) throw new Error('审查记录编号无效')
     let failedMessage = ''
     let problemCount = 0
+    let terminalEventReceived = false
     await streamApi<{ message?: string; problem_count?: number }>(`/reviews/${record.internalId}/execute`, { method: 'POST' }, ({ event, data }) => {
       if (data.message) onProgress?.(data.message)
-      if (event === 'failed') failedMessage = data.message || '审查执行失败'
-      if (event === 'completed') problemCount = data.problem_count || 0
+      if (event === 'failed') {
+        terminalEventReceived = true
+        failedMessage = data.message || '审查执行失败'
+      }
+      if (event === 'completed') {
+        terminalEventReceived = true
+        problemCount = data.problem_count || 0
+      }
     })
     if (failedMessage) throw new Error(failedMessage)
+    if (!terminalEventReceived) throw new Error('审查进度连接中断，请重新审查')
     record.problemCount = problemCount
     record.hasReport = true
     record.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
