@@ -230,3 +230,69 @@ class ReviewRecord(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    issues: Mapped[list["ReviewIssue"]] = relationship(
+        cascade="all, delete-orphan", order_by="ReviewIssue.id"
+    )
+
+
+class ReviewIssue(Base):
+    __tablename__ = "review_issues"
+    __table_args__ = (
+        CheckConstraint(
+            "dimension IN ('semantic', 'rule', 'conflict', 'consistency')",
+            name="ck_review_issue_dimension",
+        ),
+        CheckConstraint(
+            "status IN ('待处理', '已采纳', '已忽略')",
+            name="ck_review_issue_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    review_record_id: Mapped[int] = mapped_column(
+        ForeignKey("review_records.id", ondelete="CASCADE"), index=True
+    )
+    dimension: Mapped[str] = mapped_column(String(20), index=True)
+    original: Mapped[str] = mapped_column(Text)
+    location: Mapped[str] = mapped_column(String(500))
+    explanation: Mapped[str] = mapped_column(Text)
+    consequence: Mapped[str] = mapped_column(Text)
+    suggestion: Mapped[str] = mapped_column(Text)
+    insufficient_evidence: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(20), default="待处理")
+    opinion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)
+
+    histories: Mapped[list["ReviewIssueHistory"]] = relationship(
+        cascade="all, delete-orphan", order_by="ReviewIssueHistory.id"
+    )
+
+    @property
+    def evidence_status(self) -> Optional[str]:
+        if self.insufficient_evidence:
+            return "证据不足，请人工判断"
+        return None
+
+
+class ReviewIssueHistory(Base):
+    __tablename__ = "review_issue_histories"
+    __table_args__ = (
+        CheckConstraint(
+            "action IN ('采纳修改建议', '忽略', '补充处理意见')",
+            name="ck_review_issue_history_action",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    issue_id: Mapped[int] = mapped_column(
+        ForeignKey("review_issues.id", ondelete="CASCADE"), index=True
+    )
+    actor_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    actor_name: Mapped[str] = mapped_column(String(100))
+    action: Mapped[str] = mapped_column(String(30))
+    opinion: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now)

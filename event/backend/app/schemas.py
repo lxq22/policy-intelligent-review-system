@@ -165,6 +165,41 @@ class ReviewRecordOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class IssueHistoryOut(BaseModel):
+    id: int
+    actor_id: Optional[int] = None
+    actor_name: str
+    action: Literal["采纳修改建议", "忽略", "补充处理意见"]
+    opinion: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReviewIssueOut(BaseModel):
+    id: int
+    review_record_id: int
+    dimension: ReviewDimension
+    original: str
+    location: str
+    explanation: str
+    consequence: str
+    suggestion: str
+    evidence_status: Optional[str] = None
+    status: Literal["待处理", "已采纳", "已忽略"]
+    opinion: Optional[str] = None
+    details: dict
+    created_at: datetime
+    histories: list[IssueHistoryOut] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class IssueActionIn(BaseModel):
+    action: Literal["采纳修改建议", "忽略", "补充处理意见"]
+    opinion: Optional[str] = None
+
+
 class RelationOut(BaseModel):
     id: str
     type: str
