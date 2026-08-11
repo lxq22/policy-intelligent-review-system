@@ -179,9 +179,9 @@ export const initialUsers: User[] = [
 ]
 
 export const initialRecords: ReviewRecord[] = [
-  { id: '采购管理实施细则-20260730-01', regulationId: 1, regulationName: '采购管理实施细则', clauseCount: 3, dimensions: ['semantic', 'rule', 'conflict', 'consistency'], createdBy: '李明', createdAt: '2026-07-30 10:14', completedAt: '2026-07-30 10:16', problemCount: 4 },
-  { id: '合同管理细则-20260728-01', regulationId: 3, regulationName: '合同管理细则', clauseCount: 1, dimensions: ['rule', 'consistency'], createdBy: '李明', createdAt: '2026-07-28 15:30', completedAt: '2026-07-28 15:31', problemCount: 2 },
-  { id: '采购管理实施细则-20260721-02', regulationId: 1, regulationName: '采购管理实施细则', clauseCount: 1, dimensions: ['conflict'], createdBy: '周宁', createdAt: '2026-07-21 09:08', completedAt: '2026-07-21 09:09', problemCount: 1 },
+  { id: '采购管理实施细则-20260730-01', regulationId: 1, regulationName: '采购管理实施细则', clauseCount: 3, dimensions: ['semantic', 'rule', 'conflict', 'consistency'], createdBy: '李明', createdAt: '2026-07-30 10:14', completedAt: '2026-07-30 10:16', problemCount: 4, hasReport: true },
+  { id: '合同管理细则-20260728-01', regulationId: 3, regulationName: '合同管理细则', clauseCount: 1, dimensions: ['rule', 'consistency'], createdBy: '李明', createdAt: '2026-07-28 15:30', completedAt: '2026-07-28 15:31', problemCount: 2, hasReport: true },
+  { id: '采购管理实施细则-20260721-02', regulationId: 1, regulationName: '采购管理实施细则', clauseCount: 1, dimensions: ['conflict'], createdBy: '周宁', createdAt: '2026-07-21 09:08', completedAt: '2026-07-21 09:09', problemCount: 1, hasReport: true },
 ]
 
 export const initialIssues: ReviewIssue[] = [

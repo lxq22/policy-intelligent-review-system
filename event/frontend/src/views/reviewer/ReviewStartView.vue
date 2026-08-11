@@ -7,7 +7,7 @@ import { Check, Document, UploadFilled } from '@element-plus/icons-vue'
 import PageHeader from '../../components/PageHeader.vue'
 import SelectedFileCard from '../../components/SelectedFileCard.vue'
 import { useDataStore } from '../../stores/data'
-import type { DimensionKey, ReviewCreateInput, TemporaryReviewFile } from '../../types'
+import type { DimensionKey, ReviewCreateInput, ReviewRecord, TemporaryReviewFile } from '../../types'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +25,9 @@ const uploadState = ref<'idle' | 'parsing' | 'success' | 'error'>('idle')
 const uploadError = ref('')
 const runState = ref<'idle' | 'running' | 'success' | 'failed'>('idle')
 const resultId = ref('')
+const createdRecord = ref<ReviewRecord>()
+const runMessage = ref('正在创建审查记录')
+const runError = ref('')
 const busy = ref(false)
 
 const currentRegulation = computed(() => store.getRegulation(regulationId.value))
@@ -157,13 +160,19 @@ function previous() {
 
 async function runReview() {
   runState.value = 'running'
+  runError.value = ''
+  runMessage.value = '正在创建审查记录'
   try {
-    const record = await store.createReview(reviewInput())
+    const record = createdRecord.value || await store.createReview(reviewInput())
+    createdRecord.value = record
     resultId.value = record.id
+    await store.executeReview(record, (message) => { runMessage.value = message })
     runState.value = 'success'
+    await router.push(`/reviewer/reports/${encodeURIComponent(record.id)}`)
   } catch (error) {
     runState.value = 'failed'
-    ElMessage.error(error instanceof Error ? error.message : '审查输入保存失败')
+    runError.value = error instanceof Error ? error.message : '智能审查失败'
+    ElMessage.error(runError.value)
   }
 }
 
@@ -271,15 +280,15 @@ onMounted(async () => {
 
           <template v-else>
             <div class="running-wrap">
-              <template v-if="runState === 'running'"><div><div class="running-orbit"></div><h2>正在保存审查输入</h2><p class="muted">正在固定所选条款、维度和候选条款快照。</p></div></template>
-              <template v-else-if="runState === 'success'"><el-result icon="success" title="审查输入已保存" :sub-title="`已生成审查记录 ${resultId}`"><template #extra><el-button type="primary" @click="router.push('/reviewer/records')">查看审查记录</el-button></template></el-result></template>
-              <template v-else-if="runState === 'failed'"><el-result icon="error" title="保存失败" sub-title="未能保存本次审查输入，请重新提交。"><template #extra><el-button type="primary" @click="runReview">重新提交</el-button></template></el-result></template>
+              <template v-if="runState === 'running'"><div><div class="running-orbit"></div><h2>正在智能审查</h2><p class="muted">{{ runMessage }}</p><p class="muted">系统会先执行本地规则，再由 GLM‑4.7 完成语义判断。</p></div></template>
+              <template v-else-if="runState === 'success'"><el-result icon="success" title="审查完成" :sub-title="`已生成报告 ${resultId}`" /></template>
+              <template v-else-if="runState === 'failed'"><el-result icon="error" title="审查失败" :sub-title="runError"><template #extra><el-button type="primary" @click="runReview">重新审查</el-button></template></el-result></template>
             </div>
           </template>
 
           <div v-if="step < finalStep" class="wizard-footer">
             <el-button :disabled="step===0" @click="previous">上一步</el-button>
-            <el-button type="primary" :loading="busy" @click="next">{{ step === finalStep - 1 ? '保存审查输入' : '下一步' }}</el-button>
+            <el-button type="primary" :loading="busy" @click="next">{{ step === finalStep - 1 ? '开始智能审查' : '下一步' }}</el-button>
           </div>
         </div>
       </div>

@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiRequest, jsonBody } from '../api/client'
+import { apiRequest, jsonBody, streamApi } from '../api/client'
 import { multipartBody } from '../api/multipart'
-import { initialIssues } from '../data/mock'
 import type {
   CandidateClause,
   Clause,
@@ -73,6 +72,32 @@ interface ApiReviewRecord {
   candidate_snapshot: Array<{ clause_id: number }>
   created_at: string
   completed_at?: string
+  created_by_name?: string
+  problem_count: number
+  has_report: boolean
+}
+
+interface ApiIssueHistory {
+  actor_name: string
+  action: string
+  opinion?: string
+  created_at: string
+}
+
+interface ApiReviewIssue {
+  id: number
+  review_record_id: number
+  dimension: DimensionKey
+  original: string
+  location: string
+  explanation: string
+  consequence: string
+  suggestion: string
+  evidence_status?: string
+  status: ReviewIssue['status']
+  opinion?: string
+  details: Record<string, unknown>
+  histories: ApiIssueHistory[]
 }
 
 interface ApiRelation {
@@ -215,10 +240,61 @@ function mapReviewRecord(item: ApiReviewRecord): ReviewRecord {
     regulationName: item.regulation_name || '临时待审文件',
     clauseCount: item.source_snapshot.length,
     dimensions: item.dimensions,
-    createdBy: '审查人员',
+    createdBy: item.created_by_name || '—',
     createdAt: formatDateTime(item.created_at),
-    completedAt: formatDateTime(item.completed_at || item.created_at),
-    problemCount: 0,
+    completedAt: formatDateTime(item.completed_at || ''),
+    problemCount: item.problem_count || 0,
+    hasReport: item.has_report,
+  }
+}
+
+function detailText(value: unknown) {
+  return typeof value === 'string' ? value : ''
+}
+
+function mapReviewIssue(item: ApiReviewIssue, currentRegulationName = ''): ReviewIssue {
+  const base = {
+    id: String(item.id),
+    dimension: item.dimension,
+    original: item.original,
+    location: item.location,
+    explanation: item.explanation,
+    consequence: item.consequence,
+    suggestion: item.suggestion,
+    insufficientEvidence: item.evidence_status === '证据不足，请人工判断',
+    status: item.status,
+    opinion: item.opinion,
+    histories: item.histories.map((history) => ({
+      actor: history.actor_name,
+      time: formatDateTime(history.created_at),
+      action: history.action,
+      opinion: history.opinion,
+    })),
+  }
+  if (item.dimension === 'semantic') {
+    return { ...base, dimension: 'semantic', ambiguousExpression: detailText(item.details.ambiguous_expression) }
+  }
+  if (item.dimension === 'rule') {
+    return { ...base, dimension: 'rule', issueType: detailText(item.details.rule_category) || '规则问题' }
+  }
+  if (item.dimension === 'conflict') {
+    return {
+      ...base,
+      dimension: 'conflict',
+      currentRegulationName,
+      comparisonRegulationName: detailText(item.details.comparison_regulation_name),
+      comparisonOriginal: detailText(item.details.comparison_original),
+      comparisonLocation: detailText(item.details.comparison_location),
+      conflictPoint: detailText(item.details.conflict_type) || item.explanation,
+    }
+  }
+  const related = Array.isArray(item.details.related_evidence) ? item.details.related_evidence[0] as Record<string, unknown> | undefined : undefined
+  return {
+    ...base,
+    dimension: 'consistency',
+    relatedOriginal: detailText(related?.original),
+    relatedLocation: detailText(related?.location),
+    inconsistentItem: detailText(item.details.consistency_type) || item.explanation,
   }
 }
 
@@ -239,7 +315,7 @@ export const useDataStore = defineStore('data', () => {
   const users = ref<User[]>([])
   const records = ref<ReviewRecord[]>([])
   const candidateClauses = ref<CandidateClause[]>([])
-  const issues = ref<ReviewIssue[]>(structuredClone(initialIssues))
+  const issues = ref<ReviewIssue[]>([])
   const logs = ref<OperationLog[]>([])
   const relationSuggestions = ref<Record<number, RelationSuggestion[]>>({})
   const departmentItems = ref<MasterDataItem[]>([])
@@ -486,19 +562,56 @@ export const useDataStore = defineStore('data', () => {
     return records.value
   }
 
-  function processIssue(id: string, action: '采纳修改建议' | '忽略', opinion: string, actor: string) {
-    const issue = issues.value.find((item) => item.id === id)
-    if (!issue) return
-    issue.status = action === '采纳修改建议' ? '已采纳' : '已忽略'
-    issue.opinion = opinion || issue.opinion
-    issue.histories.push({ actor, time: new Date().toLocaleString('zh-CN', { hour12: false }), action, opinion: opinion || undefined })
+  async function executeReview(record: ReviewRecord, onProgress?: (message: string) => void) {
+    if (!record.internalId) throw new Error('审查记录编号无效')
+    let failedMessage = ''
+    let problemCount = 0
+    await streamApi<{ message?: string; problem_count?: number }>(`/reviews/${record.internalId}/execute`, { method: 'POST' }, ({ event, data }) => {
+      if (data.message) onProgress?.(data.message)
+      if (event === 'failed') failedMessage = data.message || '审查执行失败'
+      if (event === 'completed') problemCount = data.problem_count || 0
+    })
+    if (failedMessage) throw new Error(failedMessage)
+    record.problemCount = problemCount
+    record.hasReport = true
+    record.completedAt = new Date().toLocaleString('zh-CN', { hour12: false })
+    return record
   }
 
-  function addOpinion(id: string, opinion: string, actor: string) {
-    const issue = issues.value.find((item) => item.id === id)
-    if (!issue || !opinion) return
-    issue.opinion = opinion
-    issue.histories.push({ actor, time: new Date().toLocaleString('zh-CN', { hour12: false }), action: '补充处理意见', opinion })
+  async function loadReviewReport(recordCode: string) {
+    if (!records.value.length) await loadReviewRecords()
+    const record = records.value.find((item) => item.id === recordCode)
+    if (!record) throw new Error('审查记录不存在')
+    if (!record.internalId || !record.hasReport) throw new Error('该记录尚未生成审查报告')
+    const data = await apiRequest<ApiReviewIssue[]>(`/reviews/${record.internalId}/issues`)
+    issues.value = data.map((item) => mapReviewIssue(item, record.regulationName))
+    return record
+  }
+
+  async function processIssue(id: string, action: '采纳修改建议' | '忽略', opinion?: string) {
+    const data = await apiRequest<ApiReviewIssue>(`/reviews/issues/${id}/actions`, {
+      method: 'POST',
+      ...jsonBody({ action, opinion: opinion || null }),
+    })
+    const current = records.value.find((item) => item.internalId === data.review_record_id)
+    const mapped = mapReviewIssue(data, current?.regulationName)
+    const index = issues.value.findIndex((item) => item.id === id)
+    if (index >= 0) issues.value[index] = mapped
+    else issues.value.push(mapped)
+    return mapped
+  }
+
+  async function addOpinion(id: string, opinion: string) {
+    const data = await apiRequest<ApiReviewIssue>(`/reviews/issues/${id}/actions`, {
+      method: 'POST',
+      ...jsonBody({ action: '补充处理意见', opinion }),
+    })
+    const current = records.value.find((item) => item.internalId === data.review_record_id)
+    const mapped = mapReviewIssue(data, current?.regulationName)
+    const index = issues.value.findIndex((item) => item.id === id)
+    if (index >= 0) issues.value[index] = mapped
+    else issues.value.push(mapped)
+    return mapped
   }
 
   async function updateUserPermissions(id: number, permissions: PermissionSet) {
@@ -634,7 +747,9 @@ export const useDataStore = defineStore('data', () => {
     retryParse,
     loadCandidates,
     createReview,
+    executeReview,
     loadReviewRecords,
+    loadReviewReport,
     processIssue,
     addOpinion,
     updateUserPermissions,

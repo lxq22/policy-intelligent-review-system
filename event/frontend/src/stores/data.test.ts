@@ -137,4 +137,126 @@ describe('M4 data store', () => {
     expect(created.id).toBe(9)
     expect(store.regulations[0].fileName).toBe('上传制度.docx')
   })
+
+  it('starts with no mock issues and loads the exact historical report', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response([
+        {
+          id: 7,
+          record_code: '第一份-01',
+          source_type: 'regulation',
+          regulation_name: '第一份',
+          dimensions: ['semantic'],
+          source_snapshot: [{ clause_id: 1 }],
+          candidate_snapshot: [],
+          created_at: '2026-08-11T10:00:00',
+          completed_at: '2026-08-11T10:01:00',
+          created_by_name: '李明',
+          problem_count: 1,
+          has_report: true,
+        },
+        {
+          id: 8,
+          record_code: '第二份-01',
+          source_type: 'regulation',
+          regulation_name: '第二份',
+          dimensions: ['rule'],
+          source_snapshot: [{ clause_id: 2 }],
+          candidate_snapshot: [],
+          created_at: '2026-08-11T11:00:00',
+          completed_at: '2026-08-11T11:01:00',
+          created_by_name: '王芳',
+          problem_count: 1,
+          has_report: true,
+        },
+      ]))
+      .mockImplementationOnce(() => response([
+        {
+          id: 88,
+          review_record_id: 8,
+          dimension: 'rule',
+          original: '第二份制度原文。。',
+          location: '第三条',
+          explanation: '存在重复标点。',
+          consequence: '影响规范性。',
+          suggestion: '删除重复标点。',
+          status: '待处理',
+          details: { rule_category: '行文规范' },
+          created_at: '2026-08-11T11:01:00',
+          histories: [],
+        },
+      ]))
+    const store = useDataStore()
+
+    expect(store.issues).toEqual([])
+    await store.loadReviewRecords()
+    const record = await store.loadReviewReport('第二份-01')
+
+    expect(record.id).toBe('第二份-01')
+    expect(store.issues).toHaveLength(1)
+    expect(store.issues[0]).toMatchObject({ id: '88', dimension: 'rule', issueType: '行文规范' })
+    expect(store.issues[0].original).toBe('第二份制度原文。。')
+  })
+
+  it('persists issue actions through the backend instead of changing mock state', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() => response({
+      id: 88,
+      review_record_id: 8,
+      dimension: 'rule',
+      original: '制度原文。。',
+      location: '第三条',
+      explanation: '存在重复标点。',
+      consequence: '影响规范性。',
+      suggestion: '删除重复标点。',
+      status: '已采纳',
+      details: { rule_category: '行文规范' },
+      created_at: '2026-08-11T11:01:00',
+      histories: [{ id: 1, actor_name: '李明', action: '采纳修改建议', created_at: '2026-08-11T11:02:00' }],
+    }))
+    const store = useDataStore()
+
+    await store.processIssue('88', '采纳修改建议')
+
+    expect(fetchMock.mock.calls[0][0]).toContain('/reviews/issues/88/actions')
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      action: '采纳修改建议',
+      opinion: null,
+    })
+    expect(store.issues[0].status).toBe('已采纳')
+    expect(store.issues[0].histories[0].actor).toBe('李明')
+  })
+
+  it('consumes live review progress and marks the record report as available', async () => {
+    const stream = [
+      'event: started\ndata: {"message":"开始智能审查"}\n\n',
+      'event: dimension\ndata: {"message":"semantic"}\n\n',
+      'event: completed\ndata: {"problem_count":3}\n\n',
+    ].join('')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(stream, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    }))
+    const store = useDataStore()
+    const record = {
+      id: '测试制度-01',
+      internalId: 9,
+      regulationId: 1,
+      regulationName: '测试制度',
+      clauseCount: 1,
+      dimensions: ['semantic' as const],
+      createdBy: '李明',
+      createdAt: '',
+      completedAt: '',
+      problemCount: 0,
+      hasReport: false,
+    }
+    const progress: string[] = []
+
+    await store.executeReview(record, (message) => progress.push(message))
+
+    expect(fetchMock.mock.calls[0][0]).toContain('/reviews/9/execute')
+    expect(progress).toEqual(['开始智能审查', 'semantic'])
+    expect(record.hasReport).toBe(true)
+    expect(record.problemCount).toBe(3)
+  })
 })

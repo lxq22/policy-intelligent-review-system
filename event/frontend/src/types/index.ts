@@ -93,6 +93,7 @@ export interface ReviewRecord {
   createdAt: string
   completedAt: string
   problemCount: number
+  hasReport: boolean
 }
 
 export interface TemporaryReviewFile {
@@ -152,7 +153,7 @@ export interface SemanticIssue extends BaseIssue {
 export interface RuleIssue extends BaseIssue {
   dimension: 'rule'
   issueType: string
-  matchedRule: string
+  matchedRule?: string
 }
 
 export interface ConflictIssue extends BaseIssue {
@@ -166,8 +167,8 @@ export interface ConflictIssue extends BaseIssue {
 
 export interface ConsistencyIssue extends BaseIssue {
   dimension: 'consistency'
-  relatedOriginal: string
-  relatedLocation: string
+  relatedOriginal?: string
+  relatedLocation?: string
   inconsistentItem: string
 }
 

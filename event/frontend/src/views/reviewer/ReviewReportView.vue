@@ -1,22 +1,23 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Check, EditPen, Warning } from '@element-plus/icons-vue'
 import PageHeader from '../../components/PageHeader.vue'
 import { useDataStore } from '../../stores/data'
-import { useSessionStore } from '../../stores/session'
 import type { DimensionKey, ReviewIssue } from '../../types'
 
 const route = useRoute()
 const router = useRouter()
 const store = useDataStore()
-const session = useSessionStore()
 const activeDimension = ref<DimensionKey>('semantic')
 const opinionDialog = ref(false)
 const currentIssueId = ref('')
 const opinion = ref('')
-const record = computed(() => store.records.find((item) => item.id === route.params.id) || store.records[0])
+const loading = ref(true)
+const loadError = ref('')
+const actionBusy = ref('')
+const record = computed(() => store.records.find((item) => item.id === String(route.params.id)))
 const dimensionMeta: Array<{ key: DimensionKey; label: string; description: string }> = [
   { key: 'semantic', label: '语义分歧', description: '模糊表达与执行边界' },
   { key: 'rule', label: '规则匹配', description: '结构、编号与行文规范' },
@@ -26,9 +27,16 @@ const dimensionMeta: Array<{ key: DimensionKey; label: string; description: stri
 const visibleIssues = computed(() => store.issues.filter((item) => item.dimension === activeDimension.value))
 const counts = computed(() => Object.fromEntries(dimensionMeta.map((item) => [item.key, store.issues.filter((issue) => issue.dimension === item.key).length])))
 
-function process(issue: ReviewIssue, action: '采纳修改建议' | '忽略') {
-  store.processIssue(issue.id, action, issue.opinion || '', session.currentUser?.name || '审查人员')
-  ElMessage.success(`已${action === '采纳修改建议' ? '采纳修改建议' : '忽略该问题'}，处理动作已留痕`)
+async function process(issue: ReviewIssue, action: '采纳修改建议' | '忽略') {
+  actionBusy.value = issue.id
+  try {
+    await store.processIssue(issue.id, action)
+    ElMessage.success(`已${action === '采纳修改建议' ? '采纳修改建议' : '忽略该问题'}，处理动作已留痕`)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '处理失败')
+  } finally {
+    actionBusy.value = ''
+  }
 }
 
 function openOpinion(issue: ReviewIssue) {
@@ -37,21 +45,41 @@ function openOpinion(issue: ReviewIssue) {
   opinionDialog.value = true
 }
 
-function saveOpinion() {
+async function saveOpinion() {
   if (!opinion.value.trim()) return ElMessage.warning('请填写处理意见')
-  store.addOpinion(currentIssueId.value, opinion.value.trim(), session.currentUser?.name || '审查人员')
-  opinionDialog.value = false
-  ElMessage.success('处理意见已保存并留痕')
+  actionBusy.value = currentIssueId.value
+  try {
+    await store.addOpinion(currentIssueId.value, opinion.value.trim())
+    opinionDialog.value = false
+    ElMessage.success('处理意见已保存并留痕')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '处理意见保存失败')
+  } finally {
+    actionBusy.value = ''
+  }
 }
+
+onMounted(async () => {
+  try {
+    const loaded = await store.loadReviewReport(String(route.params.id))
+    activeDimension.value = loaded.dimensions[0] || 'semantic'
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : '审查报告加载失败'
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <template>
   <div>
-    <PageHeader eyebrow="Review Report" title="四维审查报告" :description="`${record.id} · ${record.regulationName} · ${record.problemCount} 个问题`">
+    <PageHeader eyebrow="Review Report" title="四维审查报告" :description="record ? `${record.id} · ${record.regulationName} · ${record.problemCount} 个问题` : '正在读取指定审查报告'">
       <template #actions><el-button :icon="ArrowLeft" @click="router.push('/reviewer/records')">返回审查记录</el-button></template>
     </PageHeader>
 
-    <div class="report-layout">
+    <el-skeleton v-if="loading" :rows="8" animated />
+    <el-result v-else-if="loadError" icon="error" title="无法打开报告" :sub-title="loadError"><template #extra><el-button type="primary" @click="router.push('/reviewer/records')">返回审查记录</el-button></template></el-result>
+    <div v-else-if="record" class="report-layout">
       <aside class="panel dimension-nav">
         <button v-for="item in dimensionMeta" :key="item.key" class="dimension-button" :class="{active:activeDimension===item.key}" @click="activeDimension=item.key">
           <span><strong>{{ item.label }}</strong><small style="display:block;margin-top:3px;font-weight:400">{{ item.description }}</small></span>
@@ -85,17 +113,17 @@ function saveOpinion() {
             <template v-else-if="issue.dimension === 'rule'">
               <div class="issue-field full"><label>待审制度原文</label><p>{{ issue.original }}</p><div class="table-sub">{{ issue.location }}</div></div>
               <div class="issue-field"><label>规则问题类型</label><p>{{ issue.issueType }}</p></div>
-              <div class="issue-field"><label>命中的校对规则</label><p>{{ issue.matchedRule }}</p></div>
               <div class="issue-field"><label>判断说明</label><p>{{ issue.explanation }}</p></div>
               <div class="issue-field"><label>可能造成的后果</label><p>{{ issue.consequence }}</p></div>
               <div class="issue-field full"><label>修改建议</label><p>{{ issue.suggestion }}</p></div>
             </template>
 
             <template v-else-if="issue.dimension === 'conflict'">
-              <div class="comparison-pair">
+              <div v-if="issue.comparisonOriginal" class="comparison-pair">
                 <div class="comparison-box"><label>待审制度原文 · {{ issue.currentRegulationName }}</label><p>{{ issue.original }}</p><div class="table-sub">{{ issue.location }}</div></div>
                 <div class="comparison-box compare"><label>对比制度原文 · {{ issue.comparisonRegulationName }}</label><p>{{ issue.comparisonOriginal }}</p><div class="table-sub">{{ issue.comparisonLocation }}</div></div>
               </div>
+              <div v-else class="issue-field full"><label>待审制度原文</label><p>{{ issue.original }}</p><div class="table-sub">{{ issue.location }}</div></div>
               <div class="issue-field"><label>冲突点</label><p>{{ issue.conflictPoint }}</p></div>
               <div class="issue-field"><label>判断说明</label><p>{{ issue.explanation }}</p></div>
               <div class="issue-field"><label>可能造成的后果</label><p>{{ issue.consequence }}</p></div>
@@ -103,10 +131,11 @@ function saveOpinion() {
             </template>
 
             <template v-else>
-              <div class="comparison-pair">
+              <div v-if="issue.relatedOriginal" class="comparison-pair">
                 <div class="comparison-box"><label>当前原文</label><p>{{ issue.original }}</p><div class="table-sub">{{ issue.location }}</div></div>
                 <div class="comparison-box"><label>同一制度内相关原文</label><p>{{ issue.relatedOriginal }}</p><div class="table-sub">{{ issue.relatedLocation }}</div></div>
               </div>
+              <div v-else class="issue-field full"><label>待审制度原文</label><p>{{ issue.original }}</p><div class="table-sub">{{ issue.location }}</div></div>
               <div class="issue-field"><label>不一致项</label><p>{{ issue.inconsistentItem }}</p></div>
               <div class="issue-field"><label>判断说明</label><p>{{ issue.explanation }}</p></div>
               <div class="issue-field"><label>可能造成的后果</label><p>{{ issue.consequence }}</p></div>
@@ -123,9 +152,9 @@ function saveOpinion() {
           <div class="issue-actions">
             <span class="muted">所有人工动作均记录操作人、时间、动作与意见</span>
             <div>
-              <el-button :icon="EditPen" @click="openOpinion(issue)">补充处理意见</el-button>
-              <el-button @click="process(issue,'忽略')">忽略</el-button>
-              <el-button type="primary" :icon="Check" @click="process(issue,'采纳修改建议')">采纳修改建议</el-button>
+              <el-button :icon="EditPen" :loading="actionBusy===issue.id" @click="openOpinion(issue)">补充处理意见</el-button>
+              <el-button :loading="actionBusy===issue.id" @click="process(issue,'忽略')">忽略</el-button>
+              <el-button type="primary" :icon="Check" :loading="actionBusy===issue.id" @click="process(issue,'采纳修改建议')">采纳修改建议</el-button>
             </div>
           </div>
         </div>
@@ -135,7 +164,7 @@ function saveOpinion() {
 
     <el-dialog v-model="opinionDialog" title="补充处理意见" width="560px">
       <el-input v-model="opinion" type="textarea" :rows="5" placeholder="填写人工判断、处理依据或后续安排" />
-      <template #footer><el-button @click="opinionDialog=false">取消</el-button><el-button type="primary" @click="saveOpinion">保存并留痕</el-button></template>
+      <template #footer><el-button @click="opinionDialog=false">取消</el-button><el-button type="primary" :loading="Boolean(actionBusy)" @click="saveOpinion">保存并留痕</el-button></template>
     </el-dialog>
   </div>
 </template>

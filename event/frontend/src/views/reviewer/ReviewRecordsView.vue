@@ -35,10 +35,10 @@ onMounted(() => store.loadReviewRecords())
             <div class="tag-row" style="margin-top:6px"><el-tag v-for="key in row.dimensions" :key="key" size="small" effect="plain">{{ labels[key as keyof typeof labels] }}</el-tag></div>
           </template>
         </el-table-column>
-        <el-table-column label="结果" width="100"><template #default><el-tag type="info" effect="plain">待智能审查</el-tag></template></el-table-column>
+        <el-table-column label="结果" width="130"><template #default="{row}"><el-tag v-if="row.hasReport" type="success" effect="plain">{{ row.problemCount }} 个问题</el-tag><el-tag v-else type="info" effect="plain">暂无报告</el-tag></template></el-table-column>
         <el-table-column prop="createdBy" label="发起人" width="100" />
         <el-table-column prop="createdAt" label="创建时间" width="160" />
-        <el-table-column label="操作" width="120" fixed="right"><template #default><span class="muted"><el-icon><View /></el-icon> 输入已留存</span></template></el-table-column>
+        <el-table-column label="操作" width="120" fixed="right"><template #default="{row}"><el-button v-if="row.hasReport" link type="primary" :icon="View" @click="router.push(`/reviewer/reports/${encodeURIComponent(row.id)}`)">查看报告</el-button><span v-else class="muted">输入已留存</span></template></el-table-column>
       </el-table>
       <el-empty v-if="!filtered.length" description="没有匹配的审查记录" />
     </div>
