@@ -337,6 +337,34 @@ export const useDataStore = defineStore('data', () => {
     return item
   }
 
+  async function createRegulationWithFile(
+    input: Partial<Regulation> & Pick<Regulation, 'name'>,
+    file: File,
+  ) {
+    const payload = regulationPayload(input)
+    const item = mapRegulation(await apiRequest<ApiRegulation>('/regulations/with-file', {
+      method: 'POST',
+      ...multipartBody({
+        file,
+        name: input.name,
+        code: input.code || undefined,
+        department_id: payload.department_id ? String(payload.department_id) : undefined,
+        category_id: payload.category_id ? String(payload.category_id) : undefined,
+        unit_id: payload.unit_id ? String(payload.unit_id) : undefined,
+        hierarchy: input.hierarchy || undefined,
+        version: input.version || undefined,
+        publish_date: input.publishDate || undefined,
+        effective_date: input.effectiveDate || undefined,
+        expiry_date: input.expiryDate || undefined,
+        status: input.status || undefined,
+        scope: input.scope || undefined,
+      }),
+    }))
+    regulations.value.unshift(item)
+    if (item.parseStatus === '解析成功') await loadClauses(item.id)
+    return item
+  }
+
   async function deleteRegulation(id: number) {
     await apiRequest<void>(`/regulations/${id}`, { method: 'DELETE' })
     regulations.value = regulations.value.filter((item) => item.id !== id)
@@ -594,6 +622,7 @@ export const useDataStore = defineStore('data', () => {
     loadClauses,
     getRegulation,
     saveRegulation,
+    createRegulationWithFile,
     deleteRegulation,
     restoreRegulation,
     addRelation,

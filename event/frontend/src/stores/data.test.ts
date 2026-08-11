@@ -96,4 +96,45 @@ describe('M4 data store', () => {
     })
     expect(store.records[0].id).toBe('测试制度-20260810-01')
   })
+
+  it('creates a regulation with its real initial file', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockImplementationOnce(() => response({
+        id: 9,
+        name: '上传制度',
+        code: 'TEST-009',
+        version: 'V1.0',
+        status: '生效中',
+        file_name: '上传制度.docx',
+        parse_status: '解析成功',
+        deleted: false,
+        updated_at: '2026-08-11T10:00:00',
+        versions: [],
+        relations: [],
+      }, 201))
+      .mockImplementationOnce(() => response([]))
+    const store = useDataStore()
+    const file = new File(['制度正文'], '上传制度.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+
+    const created = await store.createRegulationWithFile({
+      name: '上传制度',
+      code: 'TEST-009',
+      version: 'V1.0',
+      status: '生效中',
+      hierarchy: '二级单位制度',
+      scope: '当前单位',
+    }, file)
+
+    const request = fetchMock.mock.calls[0]
+    expect(request[0]).toContain('/regulations/with-file')
+    const body = (request[1] as RequestInit).body as FormData
+    expect(body.get('file')).toBe(file)
+    expect(body.get('name')).toBe('上传制度')
+    expect(body.get('version')).toBe('V1.0')
+    expect(body.get('status')).toBe('生效中')
+    expect(created.id).toBe(9)
+    expect(store.regulations[0].fileName).toBe('上传制度.docx')
+  })
 })
