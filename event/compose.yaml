@@ -22,6 +22,9 @@ services:
       COOKIE_SECURE: "false"
       ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost
       BOOTSTRAP_DEMO_DATA: "true"
+      FILE_STORAGE_ROOT: /app/storage
+      RETRIEVAL_TOP_K: "20"
+      RRF_K: "60"
     depends_on:
       db:
         condition: service_healthy

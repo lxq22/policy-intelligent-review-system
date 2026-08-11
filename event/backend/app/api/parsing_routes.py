@@ -34,7 +34,7 @@ def upload_temporary_file(
         parser_for(Path(file.filename or ""))
     except UnsupportedDocumentError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    stored = FileStorage(settings.storage_root).save(file, "temporary")
+    stored = FileStorage(settings.file_storage_root).save(file, "temporary")
     item = TemporaryReviewFile(
         original_name=stored.original_name,
         stored_path=stored.relative_path,
@@ -47,7 +47,7 @@ def upload_temporary_file(
     db.commit()
     db.refresh(item)
     try:
-        ParseService(settings.storage_root).parse_temporary_file(db, item.id)
+        ParseService(settings.file_storage_root).parse_temporary_file(db, item.id)
     except (DocumentParseError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.refresh(item)
@@ -87,7 +87,7 @@ def reparse_temporary_file(
 ):
     item = temporary_or_404(db, file_id)
     try:
-        ParseService(settings.storage_root).parse_temporary_file(db, item.id)
+        ParseService(settings.file_storage_root).parse_temporary_file(db, item.id)
     except (DocumentParseError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.refresh(item)
@@ -104,7 +104,7 @@ def reparse_regulation_version(
     if item is None:
         raise HTTPException(status_code=404, detail="制度版本不存在")
     try:
-        ParseService(settings.storage_root).parse_version(db, item.id)
+        ParseService(settings.file_storage_root).parse_version(db, item.id)
     except (DocumentParseError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.refresh(item)

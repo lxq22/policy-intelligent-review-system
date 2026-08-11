@@ -44,7 +44,7 @@ async function enter(role?: 'reviewer' | 'admin' | 'limited') {
           <span><el-icon><Check /></el-icon>人工处理留痕</span>
         </div>
       </div>
-      <div class="story-foot">M3 · 基础业务实现</div>
+      <div class="story-foot">M4 · 解析与审查流程</div>
     </section>
 
     <section class="login-panel">

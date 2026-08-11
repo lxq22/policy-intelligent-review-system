@@ -100,7 +100,7 @@ onMounted(async () => {
         <div>
           <span class="system-context">当前项目单位</span>
           <span class="topbar-divider"></span>
-          <span class="prototype-tag">M3 基础业务版</span>
+          <span class="prototype-tag">M4 解析审查版</span>
         </div>
         <el-dropdown trigger="click">
           <button class="user-trigger">

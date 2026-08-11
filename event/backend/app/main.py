@@ -27,7 +27,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title=settings.app_name, version="0.3.0", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="0.4.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origins,
@@ -47,7 +47,7 @@ async def http_error(_: Request, exc: HTTPException):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "milestone": "M3"}
+    return {"status": "ok", "milestone": "M4"}
 
 
 app.include_router(auth_routes.router, prefix=settings.api_prefix)

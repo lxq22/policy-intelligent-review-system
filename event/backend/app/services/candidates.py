@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..models import Clause, Regulation, RegulationVersion, TemporaryReviewFile
 from ..retrieval.embeddings import DeterministicEmbeddingProvider
 from ..retrieval.ranking import rrf
@@ -29,6 +30,7 @@ class CandidateClause:
 class CandidateService:
     def __init__(self):
         self.embedding_provider = DeterministicEmbeddingProvider()
+        self.settings = get_settings()
 
     def for_regulation(
         self, db: Session, regulation_id: int, clause_ids: list[int]
@@ -150,7 +152,9 @@ class CandidateService:
         ]
         metadata = {row[0].id: row for row in candidates}
         results: list[CandidateClause] = []
-        for clause_id, score, evidence in rrf(keyword_ids, vector_ids):
+        for clause_id, score, evidence in rrf(
+            keyword_ids, vector_ids, k=self.settings.rrf_k
+        )[: self.settings.retrieval_top_k]:
             clause, regulation, version = metadata[clause_id]
             results.append(
                 CandidateClause(

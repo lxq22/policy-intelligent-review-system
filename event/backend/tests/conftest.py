@@ -11,7 +11,7 @@ TEST_STORAGE = Path(__file__).parent / "test-storage"
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
 os.environ["BOOTSTRAP_DEMO_DATA"] = "true"
 os.environ["COOKIE_SECURE"] = "false"
-os.environ["STORAGE_ROOT"] = str(TEST_STORAGE)
+os.environ["FILE_STORAGE_ROOT"] = str(TEST_STORAGE)
 
 from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402

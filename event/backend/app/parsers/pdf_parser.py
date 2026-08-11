@@ -17,7 +17,13 @@ class PdfTextParser:
                         key=lambda block: (round(block[1], 1), round(block[0], 1)),
                     )
                     for block in blocks:
-                        text = " ".join(block[4].split()).strip()
+                        # PyMuPDF keeps visual line wraps inside a text block.  Joining
+                        # those lines without an extra separator avoids corrupting a
+                        # Chinese word that happens to cross the rendered line edge,
+                        # while preserving intentional spaces inside each source line.
+                        text = "".join(
+                            line.strip() for line in block[4].splitlines()
+                        ).strip()
                         if text:
                             paragraphs.append(
                                 ExtractedParagraph(sequence=sequence, text=text)

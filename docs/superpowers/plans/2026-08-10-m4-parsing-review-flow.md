@@ -443,7 +443,7 @@ git commit -m "feat: connect M4 parsing and review flow UI"
 - Consumes: `FILE_STORAGE_ROOT`, `RETRIEVAL_TOP_K`, and `RRF_K` environment values.
 - Produces: a Compose stack where API storage uses `file-data`, PostgreSQL has the vector extension, and M4 endpoints work through the frontend proxy.
 
-- [ ] **Step 1: Run the full pre-integration suite**
+- [x] **Step 1: Run the full pre-integration suite**
 
 Run: `cd event/backend && .venv/bin/pytest -q`
 
@@ -451,7 +451,7 @@ Run: `cd event/frontend && pnpm test --run && pnpm exec vue-tsc --noEmit && pnpm
 
 Expected: all unit tests pass before container verification.
 
-- [ ] **Step 2: Rebuild and migrate the Compose stack**
+- [x] **Step 2: Rebuild and migrate the Compose stack**
 
 Run: `cd event && docker compose build`
 
@@ -459,21 +459,21 @@ Run: `cd event && docker compose up -d`
 
 Run: `cd event && docker compose exec api alembic upgrade head`
 
-Expected: `db`, `api`, and `frontend` are healthy and migration `20260810_0002` is at head.
+Expected: `db`, `api`, and `frontend` are healthy and migration `20260810_0003` is at head.
 
-- [ ] **Step 3: Run PostgreSQL-specific integration checks**
+- [x] **Step 3: Run PostgreSQL-specific integration checks**
 
 Upload one generated DOCX and one generated PDF, confirm vector rows have dimension 256, query candidates across an existing relation, restart the stack, and confirm files, clauses, and review records persist.
 
-- [ ] **Step 4: Run browser end-to-end checks**
+- [x] **Step 4: Run browser end-to-end checks**
 
 Verify formal upload, parse display, temporary upload isolation, clause and dimension selection, conflict candidate selection, review record creation, history listing, and no console errors.
 
-- [ ] **Step 5: Write delivery documentation and milestone status**
+- [x] **Step 5: Write delivery documentation and milestone status**
 
 Document exact commands, test counts, supported boundaries, generated fixtures, known M5 exclusions, and the local URLs. Update M4 tasks from blocked to complete only when the corresponding verification evidence exists.
 
-- [ ] **Step 6: Run final verification and inspect diff**
+- [x] **Step 6: Run final verification and inspect diff**
 
 Run: `cd event/backend && .venv/bin/pytest -q`
 
@@ -485,7 +485,7 @@ Run: `git diff --check`
 
 Expected: every command exits 0 with no test failures or whitespace errors.
 
-- [ ] **Step 7: Commit M4 delivery evidence**
+- [x] **Step 7: Commit M4 delivery evidence**
 
 ```bash
 git add AI_IMPLEMENTATION_TASKS.md event

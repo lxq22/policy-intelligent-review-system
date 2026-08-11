@@ -96,6 +96,16 @@ def test_blank_pdf_is_rejected_as_scanned_without_ocr(tmp_path):
         parsers.parser_for(path).extract(path)
 
 
+def test_pdf_visual_line_wrap_does_not_insert_spaces_inside_chinese_words():
+    clauses = parse_clauses(
+        FIXTURE_ROOT / "待审查_重大事项管理_含流程冲突.pdf"
+    )
+    fifth = next(item for item in clauses if item.original_no == "第五条")
+
+    assert "部门负责人" in fifth.content
+    assert "负 责人" not in fifth.content
+
+
 @pytest.mark.parametrize("name", ["制度.doc", "制度.png", "制度.txt"])
 def test_unsupported_document_type_is_rejected(name, tmp_path):
     parsers, _ = parser_api()

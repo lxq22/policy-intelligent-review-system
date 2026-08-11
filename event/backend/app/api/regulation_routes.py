@@ -162,7 +162,7 @@ def upload_version(
     except UnsupportedDocumentError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    stored = FileStorage(settings.storage_root).save(file, f"regulations/{item.id}/versions")
+    stored = FileStorage(settings.file_storage_root).save(file, f"regulations/{item.id}/versions")
     record = RegulationVersion(
         regulation_id=item.id,
         version=version,
@@ -183,7 +183,7 @@ def upload_version(
     db.commit()
     db.refresh(record)
     try:
-        ParseService(settings.storage_root).parse_version(db, record.id)
+        ParseService(settings.file_storage_root).parse_version(db, record.id)
     except (DocumentParseError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.refresh(record)
