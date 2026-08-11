@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     file_storage_root: str = "storage"
     retrieval_top_k: int = 20
     rrf_k: int = 60
+    llm_api_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
+    llm_api_key: str = ""
+    llm_chat_model: str = "glm-4.7"
+    llm_timeout_seconds: float = 120
+    llm_thinking_enabled: bool = True
+    llm_max_tokens: int = 8192
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

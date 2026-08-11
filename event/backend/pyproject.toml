@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.16,<2",
   "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
   "jieba>=0.42,<1",
   "pgvector>=0.4,<1",
   "psycopg[binary]>=3.2,<4",
@@ -20,7 +21,6 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-  "httpx>=0.28,<1",
   "pytest>=8.4,<9",
   "reportlab>=4.4,<5"
 ]
