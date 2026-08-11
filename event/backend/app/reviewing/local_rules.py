@@ -37,8 +37,10 @@ def _semantic_rules(snapshots: list[dict]) -> list[IssueDraft]:
 def _rule_rules(snapshots: list[dict]) -> list[IssueDraft]:
     issues: list[IssueDraft] = []
     previous_number: int | None = None
+    previous_sequence: int | None = None
     for clause in snapshots:
         clause_id = clause["clause_id"]
+        sequence = clause.get("sequence")
         original_no = clause.get("original_no", "")
         text = clause.get("text", "")
         number = _article_number(original_no)
@@ -52,7 +54,13 @@ def _rule_rules(snapshots: list[dict]) -> list[IssueDraft]:
                     details={"rule_category": "文本结构"},
                 )
             )
-        elif previous_number is not None and number != previous_number + 1:
+        elif (
+            previous_number is not None
+            and isinstance(sequence, int)
+            and previous_sequence is not None
+            and sequence == previous_sequence + 1
+            and number != previous_number + 1
+        ):
             issues.append(
                 IssueDraft(
                     source_clause_id=clause_id,
@@ -64,6 +72,7 @@ def _rule_rules(snapshots: list[dict]) -> list[IssueDraft]:
             )
         if number is not None:
             previous_number = number
+            previous_sequence = sequence if isinstance(sequence, int) else None
 
         match = REPEATED_PUNCTUATION.search(text)
         if match:

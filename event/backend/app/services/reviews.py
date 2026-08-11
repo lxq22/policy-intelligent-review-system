@@ -117,6 +117,7 @@ class ReviewService:
         location = " > ".join([*clause.heading_path, clause.original_no])
         return {
             "clause_id": clause.id,
+            "sequence": clause.sequence,
             "regulation_id": regulation_id,
             "regulation_name": regulation_name,
             "version": version,

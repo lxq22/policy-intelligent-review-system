@@ -56,8 +56,8 @@ def test_local_rules_find_ambiguous_terms_and_numbering_gaps():
     from app.reviewing.local_rules import review_locally
 
     snapshots = [
-        {"clause_id": 1, "original_no": "第一条", "location": "第一条", "text": "应及时处理。"},
-        {"clause_id": 2, "original_no": "第三条", "location": "第三条", "text": "材料如下。。"},
+        {"clause_id": 1, "sequence": 1, "original_no": "第一条", "location": "第一条", "text": "应及时处理。"},
+        {"clause_id": 2, "sequence": 2, "original_no": "第三条", "location": "第三条", "text": "材料如下。。"},
     ]
 
     semantic = review_locally("semantic", snapshots)
@@ -67,6 +67,19 @@ def test_local_rules_find_ambiguous_terms_and_numbering_gaps():
     assert semantic[0].details["ambiguous_expression"] == "及时"
     assert any(item.details.get("rule_category") == "条款编号" for item in rule)
     assert any(item.details.get("rule_category") == "行文规范" for item in rule)
+
+
+def test_numbering_rule_does_not_treat_unselected_middle_clause_as_missing():
+    from app.reviewing.local_rules import review_locally
+
+    snapshots = [
+        {"clause_id": 1, "sequence": 1, "original_no": "第一条", "location": "第一条", "text": "第一条正文。"},
+        {"clause_id": 3, "sequence": 3, "original_no": "第三条", "location": "第三条", "text": "第三条正文。"},
+    ]
+
+    issues = review_locally("rule", snapshots)
+
+    assert not any(item.details.get("rule_category") == "条款编号" for item in issues)
 
 
 def test_execution_combines_local_and_glm_results_with_trusted_evidence(db):
