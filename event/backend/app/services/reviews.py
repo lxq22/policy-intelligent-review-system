@@ -37,7 +37,7 @@ class ReviewService:
                 candidate_snapshot=candidate_rows,
                 created_by=user.id,
                 created_at=now,
-                completed_at=now,
+                completed_at=None,
             )
             db.add(record)
             try:
