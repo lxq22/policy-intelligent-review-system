@@ -86,6 +86,88 @@ def create_regulation(
     return regulation_out(db, get_active_regulation(db, item.id), include_details=True)
 
 
+@router.post("/with-file", response_model=RegulationOut, status_code=201)
+def create_regulation_with_file(
+    file: UploadFile = File(...),
+    name: str = Form(...),
+    code: str | None = Form(default=None),
+    department_id: int | None = Form(default=None),
+    category_id: int | None = Form(default=None),
+    unit_id: int | None = Form(default=None),
+    hierarchy: str | None = Form(default=None),
+    version: str | None = Form(default=None),
+    publish_date: date | None = Form(default=None),
+    effective_date: date | None = Form(default=None),
+    expiry_date: date | None = Form(default=None),
+    regulation_status: str | None = Form(default=None, alias="status"),
+    scope: str | None = Form(default=None),
+    user: User = Depends(reviewer_permission("upload")),
+    db: Session = Depends(get_db),
+):
+    try:
+        parser_for(Path(file.filename or ""))
+    except UnsupportedDocumentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    storage = FileStorage(settings.file_storage_root)
+    item = Regulation(
+        name=name,
+        code=code,
+        department_id=department_id,
+        category_id=category_id,
+        unit_id=unit_id,
+        hierarchy=hierarchy,
+        current_version=version,
+        publish_date=publish_date,
+        effective_date=effective_date,
+        expiry_date=expiry_date,
+        status=regulation_status,
+        scope=scope,
+        parse_status="待解析",
+    )
+    db.add(item)
+    db.flush()
+    stored = storage.save(file, f"regulations/{item.id}/versions")
+    item.file_name = stored.original_name
+    record = RegulationVersion(
+        regulation_id=item.id,
+        version=version,
+        effective_date=effective_date,
+        file_name=stored.original_name,
+        stored_path=stored.relative_path,
+        mime_type=stored.mime_type,
+        file_size=stored.size,
+        sha256=stored.sha256,
+        parse_status="待解析",
+        note="初始版本",
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+
+    try:
+        ParseService(settings.file_storage_root).parse_version(db, record.id)
+    except (DocumentParseError, ValueError) as exc:
+        failed = db.get(Regulation, item.id)
+        if failed is not None:
+            db.delete(failed)
+            db.commit()
+        storage.delete(stored.relative_path)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    db.add(
+        OperationLog(
+            operation_type="新增制度",
+            regulation_id=item.id,
+            regulation_name=item.name,
+            operator_id=user.id,
+            operator_name=user.name,
+        )
+    )
+    db.commit()
+    return regulation_out(db, get_active_regulation(db, item.id), include_details=True)
+
+
 @router.get("/{regulation_id}", response_model=RegulationOut)
 def get_regulation(regulation_id: int, _: User = Depends(require_reviewer), db: Session = Depends(get_db)):
     return regulation_out(db, get_active_regulation(db, regulation_id), include_details=True)

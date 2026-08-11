@@ -66,6 +66,69 @@ def test_formal_upload_parses_and_lists_current_version_clauses(reviewer_client)
     assert clauses[8]["original_no"] == "第九条"
 
 
+def test_create_regulation_with_file_parses_initial_version(reviewer_client):
+    fixture = FIXTURE_ROOT / "待审查_综合审查样例.docx"
+
+    response = reviewer_client.post(
+        "/api/v1/regulations/with-file",
+        files={"file": (fixture.name, fixture.read_bytes(), DOCX_MIME)},
+        data={
+            "name": "一体化上传制度",
+            "code": "TEST-001",
+            "version": "V1.0",
+            "hierarchy": "二级单位制度",
+            "status": "生效中",
+            "scope": "当前单位",
+        },
+    )
+
+    assert response.status_code == 201
+    regulation = response.json()
+    assert regulation["name"] == "一体化上传制度"
+    assert regulation["file_name"] == fixture.name
+    assert regulation["parse_status"] == "解析成功"
+    assert regulation["versions"][0]["parse_status"] == "解析成功"
+    clauses = reviewer_client.get(
+        f"/api/v1/regulations/{regulation['id']}/clauses"
+    ).json()
+    assert len(clauses) == 13
+
+
+def test_create_regulation_with_file_requires_upload_permission(limited_client):
+    fixture = FIXTURE_ROOT / "待审查_综合审查样例.docx"
+
+    response = limited_client.post(
+        "/api/v1/regulations/with-file",
+        files={"file": (fixture.name, fixture.read_bytes(), DOCX_MIME)},
+        data={"name": "无权限制度", "version": "V1.0"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_create_regulation_with_file_removes_failed_parse(reviewer_client):
+    buffer = BytesIO()
+    with fitz.open() as document:
+        document.new_page()
+        document.save(buffer)
+
+    before = {
+        item["name"] for item in reviewer_client.get("/api/v1/regulations").json()
+    }
+    response = reviewer_client.post(
+        "/api/v1/regulations/with-file",
+        files={"file": ("扫描制度.pdf", buffer.getvalue(), "application/pdf")},
+        data={"name": "不应残留的制度", "version": "V1.0"},
+    )
+    after = {
+        item["name"] for item in reviewer_client.get("/api/v1/regulations").json()
+    }
+
+    assert response.status_code == 422
+    assert "扫描" in response.json()["error"]["message"]
+    assert after == before
+
+
 def test_reparse_endpoints_return_current_parsed_content(reviewer_client):
     regulation = create_regulation(reviewer_client, "重新解析制度")
     fixture = FIXTURE_ROOT / "待审查_资金与关联交易_含关联冲突.docx"

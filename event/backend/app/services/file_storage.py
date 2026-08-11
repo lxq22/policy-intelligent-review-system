@@ -62,3 +62,6 @@ class FileStorage:
         if not path.is_relative_to(self.root):
             raise ValueError("文件路径不安全")
         return path
+
+    def delete(self, relative_path: str) -> None:
+        self.resolve(relative_path).unlink(missing_ok=True)
